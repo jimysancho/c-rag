@@ -55,6 +55,7 @@ void chunk_visualize(chunk_t *chunk) {
 
     printf("Chunk '%s'\n", uuid_str);
     printf("\t- hash: %s\n", chunk->hash);
+    printf("\t- domain: %zu - %zu\n", chunk->metadata.start, chunk->metadata.end);
     printf("\t- content:\n\n%s\n\n", chunk->content);
 
     if (chunk->prev) {
@@ -120,7 +121,7 @@ void chunk_compute_hash(chunk_t *chunk) {
 
 chunks_t _chunks_create_fixed_size_strategy(chunker_t *chunker, file_t *file) {
     if (chunker->strategy != FIXED_SIZE_CHUNKING) {
-        perror("Wrong strategy\n");
+        perror("Wrong strategy. Expected: FIXED_SIZE_CHUNKING\n");
         exit(1);
     }
     chunk_t **chunks = malloc(sizeof(chunk_t *) * CAPACITY);
@@ -207,6 +208,95 @@ chunks_t _chunks_create_fixed_size_strategy(chunker_t *chunker, file_t *file) {
 }
 
 
+chunks_t _chunks_create_sliding_window_strategy(chunker_t *chunker, file_t *file) {
+
+    if (chunker->strategy != SLIDING_WINDOW_CHUNKING) {
+        perror("Wrong strategy. Expected: SLIDING_WINDOW_CHUNKING\n");
+        exit(1);
+    }
+    chunk_t **chunks = malloc(sizeof(chunk_t *) * CAPACITY);
+
+    if (!chunks) {
+        printf("Initial allocation for chunks failed\n"); 
+        exit(1);
+    }
+
+    size_t n_chunks = 0;
+    size_t n_words = 0;
+    size_t overlap_start = 0;
+
+    size_t start = 0;
+    size_t current_capacity = CAPACITY;
+
+    for (size_t i = 0; i < (size_t)file->bytes; i++) {
+        char c = file->contents[i];
+        if (c == ' ' || c == '\n' || c == '\t') {
+            n_words++;
+            if (
+                (chunker->params.as.sliding_window_params.window_size - n_words) 
+                == chunker->params.as.sliding_window_params.overlap) {
+                overlap_start = i + 1;
+            }
+
+            if (i > 0 && n_words % chunker->params.as.sliding_window_params.window_size == 0) {
+                char *chunk_contents = malloc(i - start + 1); // +1 for the null terminator
+                if (!chunk_contents) {
+                    printf("Could not allocate space for chunk_contents\n");
+                    exit(1);
+                }
+                memcpy(chunk_contents, &file->contents[start], i - start);
+                chunk_contents[i - start] = '\0';
+
+                if (n_chunks >= current_capacity) {
+                    current_capacity *= 2;
+                    chunks = realloc(chunks, current_capacity);
+                    if (!chunks) {
+                        printf("Reallocation of chunks failed\n");
+                        exit(1);
+                    }
+                }
+
+                chunk_t *chunk = malloc(sizeof(chunk_t));
+                if (!chunk) {
+                    printf("Could not allocate memory for chunk %zu\n", n_chunks);
+                    exit(1);
+                }
+
+                chunks[n_chunks] = chunk;
+                chunk_init(chunks[n_chunks]);
+                chunk->content = chunk_contents;
+                chunk_compute_hash(chunk);
+
+                if (n_chunks > 0) {
+                    chunk->prev = chunks[n_chunks - 1];
+                    chunks[n_chunks - 1]->next = chunk;
+                }
+
+                chunk->metadata = (chunk_metadata_t) {
+                    .bytes = strlen(chunk_contents),
+                    .path = file->path,
+                    .strategy = chunker->strategy,
+                    .start = start,
+                    .end = i
+                };
+
+                // we reset n_words for the next chunk, but not with 0, 
+                // since the start now will be the one that give us "overlap"
+                // number of words already
+                n_words = chunker->params.as.sliding_window_params.overlap;
+
+                // in sliding window, the start it's not i + 1, but 
+                // "position of -overlap words start of prev chunk"
+                start = overlap_start;
+                n_chunks++;
+                continue;
+            }
+        }
+    }
+    return (chunks_t) { .chunks = chunks, .n_chunks = n_chunks };
+}
+
+
 chunks_t chunks_create(chunker_t *chunker, file_t *file) {
     switch (chunker->strategy) {
         case FIXED_SIZE_CHUNKING:
@@ -214,6 +304,8 @@ chunks_t chunks_create(chunker_t *chunker, file_t *file) {
             return _chunks_create_fixed_size_strategy(chunker, file);
             break;
         case SLIDING_WINDOW_CHUNKING:
+            printf("Sliding window size chunking strategy for file: %s\n", file->path);
+            return _chunks_create_sliding_window_strategy(chunker, file);
             break;
         case SEMANTIC_CHUNKING:
             break;
