@@ -16,7 +16,6 @@ void ll_free(ll_t *ll) {
     node_t *curr = ll->head;
     while (curr) {
         node_t *next = curr->next;
-        free(curr->data);
         free(curr);
         curr = next;
     }
