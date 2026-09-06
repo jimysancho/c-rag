@@ -47,11 +47,12 @@
 void _test_json_parser() {
     char *text = "{"
                         "\"model\": {\"key1\": \"value1\"},"
-                        "\"data\": [{ \"embedding\": [1, 2, 3, 4]}]"
+                        "\"data\": [{ \"embedding\": [1, 2, 3, 4]}],"
+                        "\"key\": { \"key2\": \"value\", \"key3\": { \"key4\": [1, 2, 3, 4, 5]} }"
                  "}";
     int x = 0;
     json_object_t *json = json_parse(text, &x);
-    json_visualize(json->as.json);
+    json_visualize(json->as.json, 0);
 }
 
 int main() {

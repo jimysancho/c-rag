@@ -59,6 +59,6 @@ char *json_parse_string_value(char *text, int *curr);
 jlist_t *json_parse_list_value(char *text, int *curr);
 void *json_parse_bracket(hash_map_t *json, char *text, int *curr);
 json_object_t *json_parse(char *text, int *curr);
-void json_visualize(hash_map_t *json);
+void json_visualize(hash_map_t *json, size_t depth);
 
 #endif
