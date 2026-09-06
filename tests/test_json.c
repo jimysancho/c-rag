@@ -3,53 +3,269 @@
 #include <string.h>
 
 
-// static void test_json_parser() {
-//     // char *text = "{"
-//     //         "\"model\":\"text-embedding-3-small\","
-//     //         "\"input\":\"this is \"these are some tests\"my query to be embedded\""
-//     //     "}";
-
-//     char *text = "{"
-//                         "\"model\": {\"key1\": \"value1\"},"
-//                         "\"data\": [{ \"embedding\": [1, 2, 3, 4]}]"
-//                  "}";
-
-//     hash_map_t *h = json_parse(text);
-//     assert(h->n_keys == 2);
-
-//     ll_t *keys = (hash_map_get_keys(h)).keys;
-//     assert(keys != NULL);
-
-//     node_t *curr = keys->head;
-//     while (curr) {
-//         char *key = (char *)curr->data;
-//         printf("Key: %s\n", key);
-//         assert(strcmp(key, "model") == 0 || strcmp(key, "input") == 0);
-//         curr = curr->next;
-//     }
-
-//     ll_t *values = (hash_map_get_values(h)).values;
-//     assert(values != NULL);
-
-//     curr = values->head;
-//     while (curr) {
-//         char *value = (char *)curr->data;
-//         printf("Value: %s\n", value);
-//         assert(
-//             strcmp(value, "text-embedding-3-small") == 0 ||
-//             strcmp(value, "this is \"these are some tests\"my query to be embedded") == 0
-//         );
-//         curr = curr->next;
-//     }
-// }
-
-
 void _test_json_parser() {
-    char *text = "{"
-                        "\"model\": {\"key1\": \"value1\"},"
-                        "\"data\": [{ \"embedding\": [1, 2, 3, 4]}],"
-                        "\"key\": { \"key2\": \"value\", \"key3\": { \"key4\": [1, 2, 3, 4, 5]} }"
-                 "}";
+    // char *text = "{"
+    //                     "\"model\": {\"key1\": \"value1\"},"
+    //                     "\"data\": [{ \"embedding\": [1, 2, 3, 4]}],"
+    //                     "\"json_list\": [{ \"k1\": \"v1\" }, {\"k2\": \"v2\"}],"
+    //                     "\"key\": { \"key2\": \"value\", \"key3\": { \"key4\": [1, 2, 3, 4, 5]} }"
+    //              "}";
+
+    char *text = 
+    "{"
+        "\"name\":\"embedding-test-document\","
+        "\"description\":\"A large document designed to stress-test a custom JSON parser written in C.\","
+        "\"version\":\"1.4.2\","
+        "\"environment\":\"production\","
+        "\"owner\":\"data-engineering-team\","
+
+        "\"metadata\":{"
+            "\"source\":\"internal-database\","
+            "\"format\":\"json\","
+            "\"encoding\":\"utf-8\","
+            "\"language\":\"en\","
+            "\"region\":\"europe-west1\","
+            "\"department\":\"research-and-development\","
+            "\"pipeline\":\"embedding-generation\","
+            "\"model\":\"text-embedding-model\","
+            "\"status\":\"completed\","
+            "\"description\":\"Metadata associated with the document and its processing pipeline.\""
+        "},"
+
+        "\"document\":{"
+            "\"title\":\"Distributed Systems and Large Scale Data Processing\","
+            "\"author\":\"John Smith\","
+            "\"category\":\"computer-science\","
+            "\"subcategory\":\"distributed-systems\","
+            "\"publisher\":\"Engineering Publications\","
+            "\"summary\":\"This document describes architectures and algorithms for processing large amounts of data across distributed computing systems.\","
+
+            "\"sections\":{"
+                "\"introduction\":{"
+                    "\"title\":\"Introduction\","
+                    "\"text\":\"Distributed systems allow multiple independent computers to coordinate their actions and provide a unified service to users.\","
+                    "\"keywords\":\"distributed systems\","
+                    "\"embedding\":["
+                        "0.1245, -0.3381, 0.7723, 0.0912, -0.5512,"
+                        "0.4421, 0.0198, -0.8832, 0.6721, 0.2214,"
+                        "-0.1023, 0.5519, 0.3382, -0.7712, 0.4921,"
+                        "0.8213, -0.1134, 0.0921, -0.4422, 0.7312,"
+                        "0.3321, -0.9912, 0.4412, 0.1823, 0.5521"
+                    "]"
+                "},"
+
+                "\"architecture\":{"
+                    "\"title\":\"System Architecture\","
+                    "\"text\":\"A distributed architecture consists of multiple services communicating through a network and coordinating access to shared resources.\","
+                    "\"keywords\":\"architecture, services, networking\","
+                    "\"embedding\":["
+                        "-0.3312, 0.5512, 0.7721, -0.1123, 0.9921,"
+                        "0.2213, -0.5512, 0.3121, 0.4412, -0.7821,"
+                        "0.1023, 0.6612, -0.3311, 0.5521, 0.8832,"
+                        "-0.2212, 0.1123, 0.4411, 0.7722, -0.9911,"
+                        "0.2211, -0.4423, 0.3312, 0.5523, 0.1121"
+                    "]"
+                "},"
+
+                "\"consistency\":{"
+                    "\"title\":\"Consistency Models\","
+                    "\"text\":\"Consistency models define the guarantees provided by a distributed storage system when multiple clients access and modify data concurrently.\","
+                    "\"keywords\":\"consistency, replication, concurrency\","
+                    "\"embedding\":["
+                        "0.4421, 0.2212, -0.7723, 0.1192, 0.6612,"
+                        "-0.3321, 0.5512, 0.8812, -0.2213, 0.9922,"
+                        "0.1123, -0.4412, 0.7721, 0.3312, -0.5521,"
+                        "0.8811, -0.1122, 0.4413, 0.2211, -0.3312,"
+                        "0.5522, 0.7712, -0.9921, 0.3311, 0.1122"
+                    "]"
+                "},"
+
+                "\"replication\":{"
+                    "\"title\":\"Data Replication\","
+                    "\"text\":\"Replication improves availability and fault tolerance by maintaining multiple copies of the same data across different machines.\","
+                    "\"keywords\":\"replication, fault-tolerance, availability\","
+                    "\"embedding\":["
+                        "-0.1122, 0.3312, 0.5512, 0.7722, -0.9912,"
+                        "0.4412, -0.2211, 0.8812, 0.1123, -0.5521,"
+                        "0.3321, 0.7711, -0.4412, 0.2213, 0.9911,"
+                        "-0.1121, 0.5511, 0.3313, -0.7721, 0.4411,"
+                        "0.2212, -0.5513, 0.8811, 0.1122, -0.3311"
+                    "]"
+                "},"
+
+                "\"partitioning\":{"
+                    "\"title\":\"Data Partitioning\","
+                    "\"text\":\"Partitioning distributes records across multiple nodes so that each node is responsible for a subset of the overall dataset.\","
+                    "\"keywords\":\"partitioning, sharding, scalability\","
+                    "\"embedding\":["
+                        "0.2211, -0.4421, 0.7721, 0.5512, -0.3312,"
+                        "0.9912, 0.1121, -0.8812, 0.4412, 0.3311,"
+                        "-0.5522, 0.2212, 0.7723, -0.1123, 0.5511,"
+                        "0.3312, -0.9911, 0.4422, 0.1122, -0.7712,"
+                        "0.5513, -0.3313, 0.2213, 0.8811, 0.1123"
+                    "]"
+                "}"
+            "}"
+        "},"
+
+        "\"configuration\":{"
+            "\"database\":{"
+                "\"name\":\"vector-store\","
+                "\"host\":\"database.internal\","
+                "\"port\":\"5432\","
+                "\"driver\":\"postgresql\","
+                "\"schema\":\"embeddings\","
+                "\"table\":\"document_chunks\","
+                "\"index\":\"embedding_index\","
+                "\"distance_metric\":\"cosine\","
+                "\"dimensions\":\"1536\""
+            "},"
+
+            "\"embedding\":{"
+                "\"provider\":\"openai\","
+                "\"model\":\"text-embedding-3-small\","
+                "\"dimensions\":\"1536\","
+                "\"encoding\":\"float\","
+                "\"normalization\":\"none\","
+                "\"batch_size\":\"64\","
+                "\"timeout\":\"30s\","
+                "\"retry_policy\":\"exponential-backoff\""
+            "},"
+
+            "\"chunking\":{"
+                "\"strategy\":\"sliding-window\","
+                "\"chunk_size\":\"512\","
+                "\"overlap\":\"64\","
+                "\"separator\":\"newline\","
+                "\"min_chunk_size\":\"50\","
+                "\"max_chunk_size\":\"1000\""
+            "}"
+        "},"
+
+        "\"chunks\":["
+            "{"
+                "\"id\":\"chunk-0001\","
+                "\"content\":\"Distributed systems consist of independent computers that communicate over a network.\","
+                "\"source\":\"document.txt\","
+                "\"embedding\":["
+                    "0.123, -0.456, 0.789, 0.321, -0.654,"
+                    "0.987, 0.111, -0.222, 0.333, 0.444,"
+                    "-0.555, 0.666, 0.777, -0.888, 0.999"
+                "]"
+            "},"
+            "{"
+                "\"id\":\"chunk-0002\","
+                "\"content\":\"Network communication introduces latency, packet loss, retries, and partial failures.\","
+                "\"source\":\"document.txt\","
+                "\"embedding\":["
+                    "-0.111, 0.222, -0.333, 0.444, -0.555,"
+                    "0.666, -0.777, 0.888, -0.999, 0.123,"
+                    "-0.234, 0.345, -0.456, 0.567, -0.678"
+                "]"
+            "},"
+            "{"
+                "\"id\":\"chunk-0003\","
+                "\"content\":\"Replication provides redundancy and allows systems to continue operating when individual nodes fail.\","
+                "\"source\":\"document.txt\","
+                "\"embedding\":["
+                    "0.234, 0.345, 0.456, -0.567, 0.678,"
+                    "-0.789, 0.891, -0.912, 0.123, -0.234,"
+                    "0.345, -0.456, 0.567, -0.678, 0.789"
+                "]"
+            "},"
+            "{"
+                "\"id\":\"chunk-0004\","
+                "\"content\":\"Partitioning allows large datasets to be distributed across many machines and processed concurrently.\","
+                "\"source\":\"document.txt\","
+                "\"embedding\":["
+                    "-0.345, 0.456, -0.567, 0.678, -0.789,"
+                    "0.891, -0.912, 0.123, -0.234, 0.345,"
+                    "-0.456, 0.567, -0.678, 0.789, -0.891"
+                "]"
+            "},"
+            "{"
+                "\"id\":\"chunk-0005\","
+                "\"content\":\"Consistency determines how quickly updates become visible to other clients in the system.\","
+                "\"source\":\"document.txt\","
+                "\"embedding\":["
+                    "0.456, -0.567, 0.678, -0.789, 0.891,"
+                    "-0.912, 0.123, -0.234, 0.345, -0.456,"
+                    "0.567, -0.678, 0.789, -0.891, 0.912"
+                "]"
+            "}"
+        "],"
+
+        "\"statistics\":{"
+            "\"documents\":\"12453\","
+            "\"chunks\":\"58291\","
+            "\"embeddings\":\"58291\","
+            "\"failed_embeddings\":\"17\","
+            "\"average_chunk_size\":\"487\","
+            "\"processing_time\":\"3842ms\","
+            "\"last_updated\":\"2026-09-06T15:42:31Z\","
+            "\"pipeline_version\":\"3.8.1\""
+        "},"
+
+        "\"nested_data\":{"
+            "\"level1\":{"
+                "\"name\":\"first-level\","
+                "\"level2\":{"
+                    "\"name\":\"second-level\","
+                    "\"values\":["
+                        "1, -2, 3, -4, 5, -6, 7, -8, 9, -10,"
+                        "11, -12, 13, -14, 15, -16, 17, -18, 19, -20"
+                    "],"
+                    "\"level3\":{"
+                        "\"name\":\"third-level\","
+                        "\"values\":["
+                            "0.001, -0.002, 0.003, -0.004, 0.005,"
+                            "-0.006, 0.007, -0.008, 0.009, -0.010,"
+                            "0.011, -0.012, 0.013, -0.014, 0.015"
+                        "],"
+                        "\"level4\":{"
+                            "\"name\":\"fourth-level\","
+                            "\"values\":["
+                                "100, 200, -300, 400, -500,"
+                                "600, -700, 800, -900, 1000"
+                            "],"
+                            "\"level5\":{"
+                                "\"name\":\"fifth-level\","
+                                "\"values\":[]"
+                            "}"
+                        "}"
+                    "}"
+                "}"
+            "}"
+        "},"
+
+        "\"test_cases\":{"
+            "\"empty_array\":[],"
+            "\"small_array\":[1,2,3],"
+            "\"negative_values\":[-1,-2,-3,-4,-5],"
+            "\"floating_point\":[0.1,0.2,0.3,0.4,0.5],"
+            "\"mixed_numbers\":[-100,0,1.5,-2.75,300.001,4.0,-0.00001],"
+            "\"large_numbers\":[1000000,2000000,-3000000,4000000,-5000000],"
+            "\"long_array\":["
+                "1,2,3,4,5,6,7,8,9,10,"
+                "11,12,13,14,15,16,17,18,19,20,"
+                "21,22,23,24,25,26,27,28,29,30,"
+                "31,32,33,34,35,36,37,38,39,40,"
+                "41,42,43,44,45,46,47,48,49,50"
+            "]"
+        "},"
+
+        "\"strings\":{"
+            "\"simple\":\"hello\","
+            "\"spaces\":\"hello world with multiple spaces\","
+            "\"punctuation\":\"hello, world! How are you?\","
+            "\"numbers_as_string\":\"123456789\","
+            "\"long\":\"This is a deliberately long string value containing many words so that the parser also has to correctly handle strings that span a significant number of characters without accidentally truncating or corrupting the data.\""
+        "}"
+    "}";
+
+    // char *text =
+    // "{\"a\":{\"b\":{\"c\":{\"d\":\"1\"}}}}";
+
     int x = 0;
     json_object_t *json = json_parse(text, &x);
     json_visualize(json->as.json, 0);
