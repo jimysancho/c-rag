@@ -45,7 +45,7 @@ typedef struct __h_object_t {
 
 
 void ll_init(ll_t *ll);
-void ll_free(ll_t *ll);
+void ll_free(ll_t *ll, size_t free_data);
 node_t *ll_push(ll_t *ll, void *data);
 node_t *ll_peek(ll_t *ll);
 node_t *ll_pop(ll_t *ll);

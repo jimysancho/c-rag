@@ -51,24 +51,7 @@ int main(int argc, char **argv) {
 
     chunk_t *chunk = chunks.chunks[0];
     char *response = compute_embedding(chunk->content);
-    hash_map_t *h = json_parse(response);
-
-    ll_t *keys = hash_map_get_keys(h).keys;
-    node_t *n = keys->head;
-    while (n) {
-        char *key = (char *)n->data;
-        printf("Key: %s\n", key);
-        n = n->next;
-    }
-
-    ll_t *values = hash_map_get_values(h).values;
-    n = values->head;
-    while (n) {
-        char *value = (char *)n->data;
-        printf("Value: %s\n", value);
-        n = n->next;
-    }
-
+    json_object_t *j = json_parse(response);
     free(response);
 
     printf("%zu chunks created\n", chunks.n_chunks);
@@ -76,6 +59,7 @@ int main(int argc, char **argv) {
     chunks_visualize(chunks);
 
     chunks_free(chunks);
+    json_object_free(j);
     free_files(&file, 1);
     return 0;
 }

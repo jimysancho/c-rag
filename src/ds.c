@@ -12,10 +12,11 @@ void ll_init(ll_t *ll) {
 }
 
 
-void ll_free(ll_t *ll) {
+void ll_free(ll_t *ll, size_t free_data) {
     node_t *curr = ll->head;
     while (curr) {
         node_t *next = curr->next;
+        if (free_data) free(curr->data);
         free(curr);
         curr = next;
     }
@@ -90,7 +91,8 @@ void hash_map_init(hash_map_t *h, size_t n_buckets) {
 
 void hash_map_free(hash_map_t *h) {
     for (size_t n = 0; n < h->n_buckets; n++) {
-        ll_free(h->buckets[n]);
+        if (!h->buckets[n]) continue;
+        ll_free(h->buckets[n], 1);
     }
     free(h);
 }

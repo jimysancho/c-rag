@@ -57,6 +57,11 @@ void chunk_visualize(chunk_t *chunk) {
     printf("\t- hash: %s\n", chunk->hash);
     printf("\t- domain: %zu - %zu\n", chunk->metadata.start, chunk->metadata.end);
     printf("\t- content:\n\n%s\n\n", chunk->content);
+    printf("\t- embedding: [");
+    for (size_t i = 0; i < 10; i++) {
+        printf("%f, ", chunk->embedding[i]);
+    }
+    printf("...]\n");
 
     if (chunk->prev) {
         char prev_uuid[37];

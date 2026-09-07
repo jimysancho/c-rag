@@ -6,6 +6,58 @@
 #define JSON_BUCKETS 5
 
 
+void jlist_free(jlist_t *jlist) {
+    if (!jlist) return;
+    ll_t *j_ll = jlist->body;
+    if (!j_ll) {
+        free(jlist);
+        return;
+    }
+    ll_free(j_ll, 1);
+}
+
+
+void json_object_free(json_object_t *j_obj) {
+    if (!j_obj) return;
+    switch (j_obj->type) {
+        case STRING:
+            free(j_obj->as.string);
+            break;
+        case LIST: {
+            jlist_t *jlist = j_obj->as.list;
+            node_t *l = jlist->body->head;
+            for (; l != NULL; l = l->next) {
+                json_object_free((json_object_t *)l->data);
+            }
+            jlist_free(jlist);
+            break;
+        }
+        case OBJECT: {
+            h_keys_t keys = hash_map_get_keys(j_obj->as.json);
+            ll_t *keys_ll = keys.keys;
+            node_t *n = keys_ll->head;
+            for (; n != NULL; n = n->next) {
+                h_object_t *value = hash_map_get(j_obj->as.json, (char *)n->data);
+                if (!value) {
+                    printf("Something went wrong when fetching value of key %s\n", (char *)n->data);
+                    exit(1);
+                }
+                json_object_free((json_object_t *)value->value);
+            }
+            ll_free(keys.keys, 1);
+            hash_map_free(j_obj->as.json);
+            break;
+        }
+        case INTEGER:
+        case FLOAT:
+        default:
+            free(j_obj);
+            break;
+    }
+    return;
+}
+
+
 void json_visualize(hash_map_t *json, size_t depth) {
     char *tabs = 0;
     if (depth > 0) { 
@@ -70,23 +122,48 @@ void json_visualize(hash_map_t *json, size_t depth) {
         printf("\n====================================\n");
     }
     if (depth > 0) free(tabs);
+    ll_free(keys, 0);
     return;
 }
 
-
 void skip_whitespace(char *text, int *curr) {
-    while (text[*curr] == ' ' || text[*curr] == '\t') { 
+    while (text[*curr] == ' ' || text[*curr] == '\t' || text[*curr] == '\n') { 
         (*curr)++; 
     }
 }
 
 
 char *json_parse_string_value(char *text, int *curr) {
-    (*curr)++; // to skip '"'
+    if (text[*curr] == '"') (*curr)++; // to skip '"'
     skip_whitespace(text, curr);
 
     size_t start = *curr;
-    while (text[*curr] != '"' && text[*curr - 1] != '\'') (*curr)++;
+    char keyword[5];
+    size_t i = 0;
+    while (text[*curr] != '"' && text[*curr - 1] != '\'') {
+        if (i <= 3) {
+            keyword[i] = text[*curr];
+        } else if (i == 4) {
+            keyword[i] = '\0';
+            size_t found = 0;
+            if (strcmp(keyword, "null") == 0) {
+                found = 1;
+            } else if (strcmp(keyword, "true") == 0) {
+                found = 1;
+            } else if (strcmp(keyword, "false") == 0) {
+                found = 1;
+            }
+
+            if (found) {
+                char *word = malloc(sizeof(keyword));
+                memcpy(word, keyword, sizeof(keyword) + 1);
+                word[strlen(keyword)] = '\0';
+                return word;
+            }
+        }
+        (*curr)++;
+        i++;
+    }
     size_t end = *curr;
 
     size_t size = end - 1 - start + 1 + 1;
@@ -163,8 +240,20 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
         if (text[*curr] == '{') {
             printf("JSON object inside list: %s\n", &text[*curr]);
             json_object_t *json = malloc(sizeof(json_object_t));
+
+            if (!json) {
+                jlist_free(jlist);
+                return NULL;
+            }
+
             json->type = OBJECT;
             json->as.json = malloc(sizeof(hash_map_t));
+
+            if (!json->as.json) {
+                jlist_free(jlist);
+                return NULL;
+            }
+
             hash_map_init(json->as.json, 16);
             json_parse_bracket(json->as.json, text, curr);
             (*curr)++;
@@ -178,26 +267,50 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
                 int comma_offset = 0;
                 if (strstr(word, "]") != NULL) {
                     tmp_word = malloc(32);
-                    if (!tmp_word) return NULL;
+                    if (!tmp_word) {
+                        jlist_free(jlist);
+                        free(text_copy);
+                        return NULL;
+                    }
                     size_t c = 0;
                     while (word[c] != ']') {
                         if (c >= 32) {
                             tmp_word = realloc(tmp_word, strlen(tmp_word) * 2 + 1);
+                            if (!tmp_word) {
+                                jlist_free(jlist);
+                                free(text_copy);
+                                return NULL;
+                            }
                         }
                         tmp_word[c] = word[c];
                         c++;
                     }
                     tmp_word[c] = '\0';
                     tmp_word = realloc(tmp_word, strlen(tmp_word) + 1);
+                    if (!tmp_word) {
+                        jlist_free(jlist);
+                        free(text_copy);
+                        return NULL;
+                    }
                     tmp_word[strlen(tmp_word)] = '\0';
                 } else {
                     tmp_word = malloc(strlen(word) + 1);
+                    if (!tmp_word) {
+                        jlist_free(jlist);
+                        free(text_copy);
+                        return NULL;
+                    }
                     memcpy(tmp_word, word, strlen(word));
                     tmp_word[strlen(word)] = '\0';
                     comma_offset = 1;
                 }
                 *curr += strlen(tmp_word) + comma_offset; // +1 -> because of the comma
                 json_object_t *tmp_obj = malloc(sizeof(json_object_t));
+                if (!tmp_word) {
+                    jlist_free(jlist);
+                    free(text_copy);
+                    return NULL;
+                }
                 tmp_obj->type = STRING;
                 tmp_obj->as.string = tmp_word;
                 ll_push(jlist->body, (void *)tmp_obj);
@@ -226,31 +339,28 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
         // if we are here it means that before this we have encountered a '{'
         char *key = json_extract_key(text, curr);
         if (!key) {
+            hash_map_free(json);
             return NULL;
         }
         skip_whitespace(text, curr);
     
         // after this -> we have already skipped ":"
         json_object_t *obj = malloc(sizeof(json_object_t));
-        if (!obj) return NULL;
+        if (!obj) {
+            free(key);
+            hash_map_free(json);
+            return NULL;
+        }
     
         switch (text[*curr]) {
-            case '"': {                
-                char *string_value = json_parse_string_value(text, curr);
-                if (!string_value) {
-                    free(obj);
-                    return NULL;
-                }
-                obj->type = STRING;
-                obj->as.string = string_value;
-                hash_map_insert(json, key, (void *)obj, sizeof(obj));
-                printf("String value inserted in hash map -> %s\n", string_value);
-                printf("Next text: %s\n", &text[*curr]);
-                break;
-            }
             case '[': {
                 (*curr)++;
                 jlist_t *list = json_parse_list_value(text, curr);
+                if (!list) {
+                    free(key);
+                    free(obj);
+                    hash_map_free(json);
+                }
                 obj->type = LIST;
                 obj->as.list = list;
                 printf("List extracted (%zu): %s\n", list->body->size, &text[*curr]);
@@ -267,10 +377,20 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                 printf("Nested json -> %s\n", &text[*curr]);
                 (*curr)++;
                 hash_map_t *nested_hash_map = malloc(sizeof(hash_map_t));
-                if (!nested_hash_map) return NULL;
+                if (!nested_hash_map) {
+                    free(key);
+                    free(obj);
+                    hash_map_free(json);
+                    return NULL;
+                }
                 hash_map_init(nested_hash_map, 16);
     
-                json_parse_bracket(nested_hash_map, text, curr);
+                if (!json_parse_bracket(nested_hash_map, text, curr)) {
+                    free(key);
+                    free(obj);
+                    free(json);
+                    return NULL;
+                }
                 printf("Nested object obtained for key: %s\n", key);
                 obj->type = OBJECT;
                 obj->as.json = nested_hash_map;
@@ -296,9 +416,25 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
             case '8':
             case '9':
                 // integer or float
+                free(obj);
+                (*curr)++;
                 break;
-            default:
+            case '"': 
+            default: {
+                char *string_value = json_parse_string_value(text, curr);
+                if (!string_value) {
+                    free(key);
+                    free(obj);
+                    hash_map_free(json);
+                    return NULL;
+                }
+                obj->type = STRING;
+                obj->as.string = string_value;
+                hash_map_insert(json, key, (void *)obj, sizeof(obj));
+                printf("String value inserted in hash map -> %s\n", string_value);
+                printf("Next text: %s\n", &text[*curr]);
                 break;
+            }
         }
         skip_whitespace(text, curr);
     }
@@ -307,7 +443,7 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
 }
 
 
-json_object_t *json_parse(char *text, int *curr) {
+json_object_t *json_parse(char *text) {
     json_object_t *json = malloc(sizeof(json_object_t));
     if (!json) return NULL;
     json->type = OBJECT;
@@ -318,11 +454,13 @@ json_object_t *json_parse(char *text, int *curr) {
     }
     hash_map_init(json->as.json, 16);
 
-    printf("Parsing text: %s\n", &text[*curr]);
+    int curr = 0;
 
-    while (text[*curr] != '{') (*curr)++;
+    printf("Parsing text: %s\n", &text[curr]);
 
-    json_parse_bracket(json->as.json, text, curr);
+    while (text[curr] != '{') (curr)++;
+
+    json_parse_bracket(json->as.json, text, &curr);
     return json;
 }
 

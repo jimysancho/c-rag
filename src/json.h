@@ -57,8 +57,11 @@ char *json_extract_key(char *text, int *curr);
 
 char *json_parse_string_value(char *text, int *curr);
 jlist_t *json_parse_list_value(char *text, int *curr);
-void *json_parse_bracket(hash_map_t *json, char *text, int *curr);
-json_object_t *json_parse(char *text, int *curr);
+hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr);
+json_object_t *json_parse(char *text);
 void json_visualize(hash_map_t *json, size_t depth);
+
+void json_object_free(json_object_t *j_obj);
+void jlist_free(jlist_t *jlist);
 
 #endif
