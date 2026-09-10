@@ -92,8 +92,26 @@ void hash_map_init(hash_map_t *h, size_t n_buckets) {
 void hash_map_free(hash_map_t *h) {
     for (size_t n = 0; n < h->n_buckets; n++) {
         if (!h->buckets[n]) continue;
-        ll_free(h->buckets[n], 1);
+        // ll_t *ll = h->buckets[n];
+        // node_t *tmp = ll->head;
+        // for (; tmp != NULL; tmp = tmp->next) {
+        //     free(((h_object_t *)tmp->data)->key);
+        //     free(((h_object_t *)tmp->data)->value);
+        // }
+        node_t *curr = h->buckets[n]->head;
+        while (curr) {
+            node_t *next = curr->next;
+            h_object_t *obj = (h_object_t *)curr->data;
+            free(obj->key);
+            free(obj->value);
+            free(obj);
+            free(curr);
+            curr = next;
+        }
+        free(h->buckets[n]);
+        // ll_free(h->buckets[n], 0);
     }
+    free(h->buckets);
     free(h);
 }
 
@@ -113,7 +131,7 @@ h_object_t *hash_map_insert(hash_map_t *h, char *key, void *value, size_t size) 
 
     node_t *curr = ll->head;
     while (curr) {
-        h_object_t  *curr_data = (h_object_t *)curr->data;
+        h_object_t *curr_data = (h_object_t *)curr->data;
         if (strcmp(curr_data->key, key) == 0) {
             printf("Same key already exists in hash map: %s\n", key);
             exit(1);
@@ -192,7 +210,7 @@ h_object_t *hash_map_get(hash_map_t *h, char *key) {
     node_t *curr = ll->head;
     while (curr) {
         h_object_t *curr_data = (h_object_t *)curr->data;
-        if (curr_data->key == key) {
+        if (strcmp(curr_data->key, key) == 0) {
             return curr_data;
         }
         curr = curr->next;

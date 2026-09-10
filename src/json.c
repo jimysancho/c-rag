@@ -14,6 +14,7 @@ void jlist_free(jlist_t *jlist) {
         return;
     }
     ll_free(j_ll, 1);
+    free(jlist);
 }
 
 
@@ -44,14 +45,13 @@ void json_object_free(json_object_t *j_obj) {
                 }
                 json_object_free((json_object_t *)value->value);
             }
-            ll_free(keys.keys, 1);
+            ll_free(keys.keys, 0);
             hash_map_free(j_obj->as.json);
             break;
         }
         case INTEGER:
         case FLOAT:
         default:
-            free(j_obj);
             break;
     }
     return;
@@ -80,7 +80,7 @@ void json_visualize(hash_map_t *json, size_t depth) {
         char *key = (char *)curr->data;
         h_object_t *h_obj = hash_map_get(json, key);
         if (!h_obj) {
-            printf("Something went wrong. Could not find key %s\n", key);
+            printf("Something went wrong. Could not find key '%s'\n", key);
             exit(1);
         }
         json_object_t *j_obj = (json_object_t *)h_obj->value;
@@ -306,7 +306,7 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
                 }
                 *curr += strlen(tmp_word) + comma_offset; // +1 -> because of the comma
                 json_object_t *tmp_obj = malloc(sizeof(json_object_t));
-                if (!tmp_word) {
+                if (!tmp_obj) {
                     jlist_free(jlist);
                     free(text_copy);
                     return NULL;
@@ -348,6 +348,7 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
         json_object_t *obj = malloc(sizeof(json_object_t));
         if (!obj) {
             free(key);
+            free(obj);
             hash_map_free(json);
             return NULL;
         }
@@ -392,6 +393,7 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                     return NULL;
                 }
                 printf("Nested object obtained for key: %s\n", key);
+                // NOTE: the leaks I'm getting I think happens at this point: with nested objects
                 obj->type = OBJECT;
                 obj->as.json = nested_hash_map;
 

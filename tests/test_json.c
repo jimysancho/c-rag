@@ -265,10 +265,21 @@ void _test_json_parser() {
 
     // char *text =
     // "{\"a\":{\"b\":{\"c\":{\"d\":\"1\"}}}}";
+    (void)text;
 
-    int x = 0;
-    json_object_t *json = json_parse(text, &x);
-    json_visualize(json->as.json, 0);
+    char *text2 = "{"
+    "\"error\": {"
+            "\"message\": \"Incorrect API key provided: (null). You can find your API key at https://platform.openai.com/account/api-keys.\","
+            "\"type\": \"invalid_request_error\","
+            "\"param\": null,"
+            "\"code\": \"invalid_api_key\""
+        "}"
+    "}";
+
+    json_object_t *json = json_parse(text2);
+    // json_visualize(json->as.json, 0);
+    json_object_free(json);
+    free(json);
 }
 
 int main() {
