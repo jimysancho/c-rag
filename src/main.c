@@ -9,7 +9,7 @@
 #include "json.h"
 #include "math.h"
 
-#define N_THREADS 1
+#define N_THREADS 10
 
 
 typedef struct __thread_arg {
@@ -27,8 +27,9 @@ void *thread_compute_embedding(void *arg) {
     json_object_t *j = json_parse(response);
     float embedding[1536] = {0};
     get_embedding_from_json(j, embedding);
+    chunk_t *chunk = t_arg->chunks->chunks[t_arg->index];
     for (size_t s = 0; s < 1536; s++) {
-        t_arg->chunks->chunks[t_arg->index]->embedding[s] = embedding[s];
+        chunk->embedding[s] = embedding[s];
     }
     free(response);
     json_object_free(j);
@@ -87,26 +88,14 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    // chunker_t chunker = (chunker_t) {
-    //     .strategy = FIXED_SIZE_CHUNKING,
-    //     .params = (chunking_strategy_params_t) {
-    //         .strategy = FIXED_SIZE_CHUNKING,
-    //         .as = {
-    //             (fixed_size_params_t) {
-    //                 .size = 10
-    //             }
-    //         }
-    //     }
-    // };
-
     chunker_t chunker = (chunker_t) {
         .strategy = SLIDING_WINDOW_CHUNKING,
         .params = (chunking_strategy_params_t) {
             .strategy = SLIDING_WINDOW_CHUNKING,
             .as = {
                 .sliding_window_params = {
-                    .window_size = 5,
-                    .overlap = 2
+                    .window_size = 500,
+                    .overlap = 40
                 }
             }
         }
@@ -118,24 +107,23 @@ int main(int argc, char **argv) {
 
     //TODO: create a thread pool from which get tasks or something like that 
     pthread_t threads[N_THREADS];
+    thread_arg **args = malloc(sizeof(thread_arg *) * chunks.n_chunks);
     for (size_t index = 0; index < chunks.n_chunks; index++) {
-        thread_arg arg = (thread_arg) {
-            .chunks = &chunks, 
-            .index = index
-        };
-        pthread_create(&threads[index], NULL, thread_compute_embedding, (void *)&arg);
+        // NOTE: arg needs to be allocated, otherwise, its address will be the same always
+        // and therefore it will become a race condition on the index
+        thread_arg *arg = (thread_arg *)malloc(sizeof(thread_arg));
+        if (!arg) exit(1);
+        arg->chunks = &chunks, 
+        arg->index = index;
+        args[index] = arg;
+        pthread_create(&threads[index], NULL, thread_compute_embedding, (void *)arg);
     }
 
     for (size_t index = 0; index < chunks.n_chunks; index++) {
         pthread_join(threads[index], NULL);
+        free(args[index]);
     }
-
-    float sim = compute_similarity(
-        chunks.chunks[0]->embedding,
-        chunks.chunks[1]->embedding
-    );
-
-    printf("Sim between c1 and c2: %f\n", sim);
+    free(args);
 
     printf("%zu chunks created\n", chunks.n_chunks);
 

@@ -197,12 +197,9 @@ char *compute_embedding(char *content) {
                 "Request failed: %s\n",
                 curl_easy_strerror(res));
     } else {
-        printf("Response (%zu bytes):\n%s\n",
-               response.size,
-               response.data);
+        printf("Response (%zu bytes)\n",
+               response.size);
     }
-
-    printf("Response: %s\n", response.data);
 
     free(json);
     free(escaped_content);

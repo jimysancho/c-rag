@@ -277,7 +277,7 @@ void _test_json_parser() {
     "}";
 
     json_object_t *json = json_parse(text2);
-    // json_visualize(json->as.json, 0);
+    json_visualize(json->as.json, 0);
     json_object_free(json);
     free(json);
 }

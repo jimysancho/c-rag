@@ -174,9 +174,13 @@ char *json_parse_string_value(char *text, int *curr) {
 
     memcpy(string_value, &text[start], size);
     string_value[size - 1] = '\0';
+#ifdef DEBUG
     printf("Value extracted: %s\n", string_value);
+#endif
     (*curr)++;
+#ifdef DEBUG
     printf("Text after value: %s\n", &text[*curr]);
+#endif
     return string_value;
 }
 
@@ -193,7 +197,7 @@ char *json_extract_key(char *text, int *curr) {
     size_t end_key = *curr;
 
     size_t size = end_key - 1 - start_key + 1;
-    char *key = malloc(size);
+    char *key = malloc(size + 1); // for null terminator
     if (!key) {
         return NULL;
     }
@@ -201,7 +205,9 @@ char *json_extract_key(char *text, int *curr) {
     memcpy(key, &text[start_key], size);
     key[size] = '\0';
 
+#ifdef DEBUG
     printf("Key encountered: %s\n", key);
+#endif
 
     // skip '"'
     (*curr)++;
@@ -210,6 +216,7 @@ char *json_extract_key(char *text, int *curr) {
     skip_whitespace(text, curr);
     if (text[*curr] != ':') {
         printf("Wrong json\n");
+        free(key);
         return NULL;
     }
 
@@ -233,12 +240,16 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
 
     while (text[*curr] != ']') {
 
+        #ifdef DEBUG
         printf("List item: %zu\n", jlist->body->size);
+        #endif
 
         skip_whitespace(text, curr);
 
         if (text[*curr] == '{') {
+            #ifdef DEBUG
             printf("JSON object inside list: %s\n", &text[*curr]);
+            #endif
             json_object_t *json = malloc(sizeof(json_object_t));
 
             if (!json) {
@@ -257,7 +268,10 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
             hash_map_init(json->as.json, 16);
             json_parse_bracket(json->as.json, text, curr);
             (*curr)++;
+            #ifdef DEBUG
             printf("JSON object obtained within list -> %s\n", &text[*curr]);
+            #endif
+
             ll_push(jlist->body, (void *)json);
         } else {
             // any other thing is an array 
@@ -320,8 +334,7 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
         }
 
         if (text[*curr] != ',' && text[*curr] != ']') {
-            printf("Wrong list. Expected ','; got: '%c'\n", text[*curr]);
-            printf("%s\n", &text[*curr]);
+            printf("Wrong list. Expected ','; got: '%c' (%d)\n", text[*curr], *curr);
             exit(1);
         } else if (text[*curr] == ',') {
             (*curr)++;
@@ -335,7 +348,10 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
 hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
 
     while (text[*curr] != '}') {
+        #ifdef DEBUG
         printf("Current character: %c\n", text[*curr]);
+        #endif
+
         // if we are here it means that before this we have encountered a '{'
         char *key = json_extract_key(text, curr);
         if (!key) {
@@ -364,7 +380,10 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                 }
                 obj->type = LIST;
                 obj->as.list = list;
+                #ifdef DEBUG
                 printf("List extracted (%zu): %s\n", list->body->size, &text[*curr]);
+                #endif
+
                 hash_map_insert(json, key, (void *)obj, sizeof(obj));
                 if (text[*curr] != ']') {
                     printf("JSON parsing went wrong. Expected: ']' -> %s\n", &text[*curr]);
@@ -375,7 +394,10 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                 break;
             }
             case '{': {
+                #ifdef DEBUG
                 printf("Nested json -> %s\n", &text[*curr]);
+                #endif
+
                 (*curr)++;
                 hash_map_t *nested_hash_map = malloc(sizeof(hash_map_t));
                 if (!nested_hash_map) {
@@ -392,7 +414,10 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                     free(json);
                     return NULL;
                 }
+                #ifdef DEBUG
                 printf("Nested object obtained for key: %s\n", key);
+                #endif
+
                 // NOTE: the leaks I'm getting I think happens at this point: with nested objects
                 obj->type = OBJECT;
                 obj->as.json = nested_hash_map;
@@ -418,6 +443,7 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
             case '8':
             case '9':
                 // integer or float
+                free(key);
                 free(obj);
                 (*curr)++;
                 break;
@@ -433,14 +459,20 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                 obj->type = STRING;
                 obj->as.string = string_value;
                 hash_map_insert(json, key, (void *)obj, sizeof(obj));
+                #ifdef DEBUG
                 printf("String value inserted in hash map -> %s\n", string_value);
                 printf("Next text: %s\n", &text[*curr]);
+                #endif
+
                 break;
             }
         }
         skip_whitespace(text, curr);
     }
+    #ifdef DEBUG
     printf("Bracket parsed (%d) -> %s\n", *curr, &text[*curr]);
+    #endif
+
     return json;
 }
 
@@ -458,12 +490,13 @@ json_object_t *json_parse(char *text) {
 
     int curr = 0;
 
+    #ifdef DEBUG
     printf("Parsing text: %s\n", &text[curr]);
+    #endif
+
 
     while (text[curr] != '{') (curr)++;
 
     json_parse_bracket(json->as.json, text, &curr);
     return json;
 }
-
-//TODO: malloc - free properly. if something that should not be null is null -> free, etc
