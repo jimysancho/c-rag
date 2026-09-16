@@ -2,12 +2,13 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
 #define CHUNK_PREFIX
-
+#define N_THREADS 10
 
 
 size_t __create_folder_if_not_exists(char *path) {
@@ -172,16 +173,176 @@ size_t db_insert(db_t *db, chunk_t *chunk) {
 }
 
 
-chunk_t *db_retrieve(db_t *db, chunk_t *chunk) {
+chunk_t *db_retrieve(db_t *db, char *hash) {
     __create_db_folder(db);
-    (void)chunk;
+    // check existence of chunk 
+    char *chunk_path = __path_join(db->path, hash);
+    DIR *dir = opendir(chunk_path);
+    if (errno == ENOENT) {
+        printf("Something went wrong with chunk %s\n", chunk_path);
+        free(chunk_path);
+        exit(1);
+    }
 
-    // based on path db->path + chunk->hash, get each file
+    closedir(dir);
 
-    // 1. Check whether each file exists or not
-    // 2. Load each one
-    
-    return 0;
+    char *content_path, *embedding_path, *rel_path, *metadata_path;
+    content_path = __path_join(chunk_path, "content");
+    embedding_path = __path_join(chunk_path, "embedding");
+    rel_path = __path_join(chunk_path, "relationships");
+    metadata_path = __path_join(chunk_path, "metadata");
+
+    FILE *content_file, *embedding_file, *rel_file, *metadata_file;
+    content_file = fopen(content_path, "r");
+    embedding_file = fopen(embedding_path, "r");
+    rel_file = fopen(rel_path, "r");
+    metadata_file = fopen(metadata_path, "r");
+
+    if (!content_file || !embedding_file || !rel_file || !metadata_file) {
+        printf("Corruption of chunk %s. Missing content_file\n", chunk_path);
+        free(chunk_path);
+        free(content_path);
+        free(embedding_path);
+        free(metadata_path);
+
+        if (content_file) fclose(content_file);
+        if (embedding_file) fclose(embedding_file);
+        if (rel_file) fclose(rel_file);
+        if (metadata_file) fclose(metadata_file);
+        exit(1);
+    }
+
+    chunk_t *chunk = malloc(sizeof(chunk_t));
+
+    if (!chunk) {
+        free(chunk_path);
+        free(content_path);
+        free(embedding_path);
+        free(metadata_path);
+
+        if (content_file) fclose(content_file);
+        if (embedding_file) fclose(embedding_file);
+        if (rel_file) fclose(rel_file);
+        if (metadata_file) fclose(metadata_file);
+        exit(1);
+    }
+
+    chunk_init(chunk);
+    char *hash_copy = strdup(hash);
+    for (size_t i = 0; i < 65; i++) {
+        chunk->hash[i] = hash_copy[i];
+    }
+    chunk->hash[64] = '\0';
+    free(hash_copy);
+
+    chunk_metadata_t metadata;
+
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t read;
+
+    // we have 5 lines
+    size_t n = 0;
+    while ((read = getline(&line, &len, metadata_file)) != -1) {
+        if (read > 0 && line[read - 1] == '\n') {
+            line[read - 1] = '\0';
+        }
+        switch (n) {
+            case 0:
+                // 0 -> bytes
+                metadata.bytes = (long)atoi(line);
+                break;
+            case 1:
+                // 1 -> path
+                metadata.path = strdup(line);
+                break;
+            case 2:
+                // 2-> strategy
+                switch (atoi(line)) {
+                    case FIXED_SIZE_CHUNKING:
+                        metadata.strategy = FIXED_SIZE_CHUNKING;
+                        break;
+                    case SLIDING_WINDOW_CHUNKING:
+                        metadata.strategy = SLIDING_WINDOW_CHUNKING;    
+                        break;
+                    case SEMANTIC_CHUNKING:
+                        metadata.strategy = SEMANTIC_CHUNKING;
+                        break;
+                    case STRUCTURAL_CHUNKING:
+                        metadata.strategy = STRUCTURAL_CHUNKING;
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case 3:
+                // start
+                metadata.start = (size_t)atoi(line);
+                break;
+            case 4:
+                // end
+                metadata.end = (size_t)atoi(line);
+                break;
+            default:
+                break;
+        }
+        n++;
+    }
+    free(line);
+    chunk->metadata = metadata;
+
+    char *contents = NULL;
+    if (chunk->metadata.bytes > 0) {
+        contents = malloc(chunk->metadata.bytes + 1);
+        if (!contents) {
+            fclose(content_file);
+            fclose(rel_file);
+            fclose(embedding_file);
+            fclose(metadata_file);
+
+            free(chunk_path);
+            free(content_path);
+            free(embedding_path);
+            free(metadata_path);
+            free(rel_path);
+
+            free(chunk->metadata.path);
+            exit(1);
+        }
+        size_t nread = fread(contents, 1, chunk->metadata.bytes, content_file);
+        if (nread != (size_t)chunk->metadata.bytes) {
+            printf("bytes read vs actually read: %zu %zu\n", (size_t)chunk->metadata.bytes + 1, nread);
+            fclose(content_file);
+            fclose(rel_file);
+            fclose(embedding_file);
+            fclose(metadata_file);
+
+            free(chunk_path);
+            free(content_path);
+            free(embedding_path);
+            free(metadata_path);
+            free(rel_path);
+
+            free(chunk->metadata.path);
+            exit(1);
+        }
+        contents[chunk->metadata.bytes] = '\0';
+    }
+    chunk->content = contents;
+
+    // TODO: load embedding, load relationships
+    free(chunk_path);
+    free(content_path);
+    free(embedding_path);
+    free(metadata_path);
+    free(rel_path);
+
+    fclose(content_file);
+    fclose(rel_file);
+    fclose(embedding_file);
+    fclose(metadata_file);
+
+    return chunk;
 }
 
 
@@ -190,3 +351,85 @@ size_t db_delete(db_t *db, chunk_t *chunk) {
     (void)chunk;
     return 0;
 }
+
+
+typedef struct __bulk_retrieve_t {
+    pthread_mutex_t *lock;
+    chunks_t *chunks;
+    size_t index;
+    char *hash;
+    db_t *db;
+} bulk_retrieve_t;
+
+
+void _add_chunk(chunks_t *chunks, 
+                chunk_t *chunk, 
+                size_t index,
+                pthread_mutex_t *lock) {
+    pthread_mutex_lock(lock);
+    chunks->chunks[index] = chunk;
+    chunks->n_chunks++;
+    pthread_mutex_unlock(lock);
+}
+
+
+void *retrieve_and_add(void *b_arg) {
+    bulk_retrieve_t *bulk_retrieve_arg = (bulk_retrieve_t *)b_arg;
+    chunk_t *chunk = db_retrieve(bulk_retrieve_arg->db, bulk_retrieve_arg->hash);
+    if (!chunk) {
+        printf("Could not retrieve %s\n", bulk_retrieve_arg->hash);
+        return NULL;
+    }
+    _add_chunk(
+        bulk_retrieve_arg->chunks, 
+        chunk, 
+        bulk_retrieve_arg->index, 
+        bulk_retrieve_arg->lock
+    );
+    return NULL;
+}
+
+
+size_t db_bulk_insert(db_t *db, chunks_t *chunks);
+
+chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
+    chunks_t retrieve_chunks = {
+        .chunks = malloc(sizeof(chunk_t *) * size),
+        .n_chunks = 0,
+    };
+    if (!retrieve_chunks.chunks) exit(1);
+
+    pthread_mutex_t lock;
+    pthread_mutex_init(&lock, NULL);
+
+    size_t n_threads = N_THREADS > size ? size : N_THREADS;
+    pthread_t threads[n_threads];
+    size_t index = 0;
+
+    while (retrieve_chunks.n_chunks != size) {
+        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+            bulk_retrieve_t *arg = malloc(sizeof(bulk_retrieve_t));
+            if (!arg) exit(1);
+            arg->chunks = &retrieve_chunks;
+            arg->db = db;
+            arg->hash = hash[index];
+            arg->lock = &lock;
+            arg->index = index;
+            pthread_create(&threads[p_n], NULL, retrieve_and_add, (void *)arg);
+            if (index >= size) {
+                printf("somethign went wrong -> %zu\n", index);
+                exit(1);
+            }
+            index++;
+        }
+
+        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+            pthread_join(threads[p_n], NULL);
+        }
+    }
+
+    pthread_mutex_destroy(&lock);
+    return retrieve_chunks;
+    
+}
+size_t db_bulk_delete(db_t *db, chunks_t *chunks);
