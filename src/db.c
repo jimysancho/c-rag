@@ -9,6 +9,7 @@
 
 #define CHUNK_PREFIX
 #define N_THREADS 10
+#define CHILDREN_CAP 5
 
 
 size_t __create_folder_if_not_exists(char *path) {
@@ -113,26 +114,30 @@ size_t db_insert(db_t *db, chunk_t *chunk) {
         exit(1);
     }
 
-    if (chunk->prev) {
-        fprintf(rel_file, "%s", chunk->prev->hash);
+    if (chunk->prev_ref && chunk->prev_ref->as.chunk) {
+        chunk_type_is_correct(chunk->prev_ref, FULL);
+        fprintf(rel_file, "%s", chunk->prev_ref->as.chunk->hash);
     } else {
         fprintf(rel_file, "%s", "null");
     }
     fprintf(rel_file, "%s", "\n");
-    if (chunk->next) {
-        fprintf(rel_file, "%s", chunk->next->hash);
+    if (chunk->next_ref && chunk->next_ref->as.chunk) {
+        chunk_type_is_correct(chunk->prev_ref, FULL);
+        fprintf(rel_file, "%s", chunk->next_ref->as.chunk->hash);
     } else {
         fprintf(rel_file, "%s", "null");
     }
     fprintf(rel_file, "%s", "\n");
-    if (chunk->parent) {
-        fprintf(rel_file, "%s", chunk->parent->hash);
+    if (chunk->parent_ref && chunk->parent_ref->as.chunk) {
+        chunk_type_is_correct(chunk->prev_ref, FULL);
+        fprintf(rel_file, "%s", chunk->parent_ref->as.chunk->hash);
         fprintf(rel_file, "%s", "\n");
     }
 
-    if (chunk->children.chunks) {
-        for (size_t n_c = 0; n_c < chunk->children.n_chunks; n_c++) {
-            fprintf(rel_file, "%s", chunk->children.chunks[n_c]->hash);
+    if (chunk->children_ref.chunk_refs) {
+        for (size_t n_c = 0; n_c < chunk->children_ref.size; n_c++) {
+            chunk_type_is_correct(chunk->children_ref.chunk_refs[n_c], FULL);
+            fprintf(rel_file, "%s", chunk->children_ref.chunk_refs[n_c]->as.chunk->hash);
             fprintf(rel_file, "%s", "\n");
         }
     }
@@ -179,7 +184,7 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     char *chunk_path = __path_join(db->path, hash);
     DIR *dir = opendir(chunk_path);
     if (errno == ENOENT) {
-        printf("Something went wrong with chunk %s\n", chunk_path);
+        printf("Something went wrong with chunk %s -> %s\n", chunk_path, strerror(errno));
         free(chunk_path);
         exit(1);
     }
@@ -227,7 +232,7 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
         exit(1);
     }
 
-    chunk_init(chunk);
+    chunk_init(chunk, HASH);
     char *hash_copy = strdup(hash);
     for (size_t i = 0; i < 65; i++) {
         chunk->hash[i] = hash_copy[i];
@@ -331,6 +336,56 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     chunk->content = contents;
 
     // TODO: load embedding, load relationships
+    char *rel_line = NULL;
+    ssize_t rel_read;
+
+    chunks_ref_t children = {0};
+    n = 0;
+
+    while ((rel_read = getline(&rel_line, &len, rel_file)) != -1) {
+        if (rel_read > 0 && rel_line[rel_read - 1] == '\n') {
+            rel_line[rel_read - 1] = '\0';
+        }
+        switch (n) {
+            case 0:
+                // 0 -> prev
+                memcpy(chunk->prev_ref->as.hash, rel_line, 64);
+                chunk->prev_ref->as.hash[64] = '\0';
+                break;
+            case 1:
+                // 1 -> next
+                memcpy(chunk->next_ref->as.hash, rel_line, 64);
+                chunk->next_ref->as.hash[64] = '\0';
+                break;
+            case 2:
+                // 2-> parent
+                memcpy(chunk->parent_ref->as.hash, rel_line, 64);
+                chunk->parent_ref->as.hash[64] = '\0';
+                break;
+            // the rest are children
+            case 3: {
+                    if (strcmp(rel_line, "\n") == 0) break;
+                    children.chunk_refs = malloc(sizeof(chunk_t) * CHILDREN_CAP);
+                    memcpy(children.chunk_refs[children.size++]->as.hash, rel_line, 64);
+                    children.chunk_refs[children.size]->as.hash[64] = '\0';
+                }
+                // first children
+            default:
+                // rest of children
+                {
+                    if (strcmp(rel_line, "\n") == 0) break;
+                    if (children.size >= CHILDREN_CAP) {
+                        children.chunk_refs = realloc(children.chunk_refs, children.size * 2);
+                    }
+                    memcpy(children.chunk_refs[children.size++]->as.hash, rel_line, 64);
+                    children.chunk_refs[children.size]->as.hash[64] = '\0';
+                }
+                break;
+        }
+        n++;
+    }
+    free(rel_line);
+
     free(chunk_path);
     free(content_path);
     free(embedding_path);
@@ -390,7 +445,7 @@ void *retrieve_and_add(void *b_arg) {
 }
 
 
-size_t db_bulk_insert(db_t *db, chunks_t *chunks);
+size_t db_bulk_insert(db_t *db, chunks_t chunks);
 
 chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
     chunks_t retrieve_chunks = {

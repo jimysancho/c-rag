@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <openssl/sha.h>
 #include <string.h>
 #include <stdlib.h>
@@ -10,18 +11,29 @@
 #define CAPACITY 32
 
 
-void chunk_init(chunk_t *chunk) {
+void chunk_type_is_correct(chunk_ref_t *chunk_ref, ref_type expected) {
+    assert(chunk_ref->type == expected);
+}
+
+
+void chunk_init(chunk_t *chunk, ref_type type) {
     uuid_generate_random(chunk->chunk_id);
     chunk->hash[0] = '\0';
     chunk->content = NULL;
     memset(chunk->embedding, 0, sizeof(chunk->embedding));
-    chunk->children = (chunks_t) {
-        .chunks = NULL,
-        .n_chunks = 0
+    chunk->children_ref = (chunks_ref_t) {
+        .chunk_refs = NULL,
+        .size = 0
     };
-    chunk->next = NULL;
-    chunk->prev = NULL;
-    chunk->parent = NULL;
+    chunk->next_ref = malloc(sizeof(chunk_ref_t));
+    if (!chunk->next_ref) exit(1);
+    chunk->next_ref->type = type;
+    chunk->prev_ref = malloc(sizeof(chunk_ref_t));
+    if (!chunk->prev_ref) exit(1);
+    chunk->prev_ref->type = type;
+    chunk->parent_ref = malloc(sizeof(chunk_ref_t));
+    if (!chunk->prev_ref) exit(1);
+    chunk->parent_ref->type = type;
     chunk->metadata = (chunk_metadata_t) {
         .bytes = 0,
         .path = NULL,
@@ -32,6 +44,9 @@ void chunk_init(chunk_t *chunk) {
 
 void chunk_free(chunk_t *chunk) {
     free(chunk->content);
+    free(chunk->prev_ref);
+    free(chunk->next_ref);
+    free(chunk->parent_ref);
     // if (chunk->embedding) {
     //     //NOTE -> not sure about this tbh
     //     free(chunk->embedding);
@@ -48,7 +63,7 @@ void chunks_free(chunks_t chunks) {
 }
 
 
-void chunk_visualize(chunk_t *chunk) {
+void chunk_visualize(chunk_t *chunk, ref_type type) {
     char uuid_str[37];
 
     uuid_unparse_lower(chunk->chunk_id, uuid_str);
@@ -63,45 +78,77 @@ void chunk_visualize(chunk_t *chunk) {
     }
     printf("...]\n");
 
-    if (chunk->prev) {
-        char prev_uuid[37];
-        uuid_unparse_lower(chunk->prev->chunk_id, prev_uuid);
-        printf("\t- prev: %s\n", prev_uuid);
+    chunk_type_is_correct(chunk->prev_ref, type);
+    if (type == FULL) {
+        if (chunk->prev_ref && chunk->prev_ref->as.chunk) {
+            char prev_uuid[37];
+            uuid_unparse_lower(chunk->prev_ref->as.chunk->chunk_id, prev_uuid);
+            printf("\t- prev: %s\n", prev_uuid);
+        } else {
+            printf("\t- prev: (null)\n");
+        }
     } else {
-        printf("\t- prev: (null)\n");
+        if (chunk->prev_ref) {
+            printf("\t- prev: %s\n", chunk->prev_ref->as.hash);
+        } else {
+            printf("\t- prev: (null)\n");   
+        }
     }
 
-    if (chunk->next) {
-        char next_uuid[37];
-        uuid_unparse_lower(chunk->next->chunk_id, next_uuid);
-        printf("\t- next: %s\n", next_uuid);
+    chunk_type_is_correct(chunk->next_ref, type);
+    if (type == FULL) {        
+        if (chunk->next_ref && chunk->next_ref->as.chunk) {
+            char next_uuid[37];
+            uuid_unparse_lower(chunk->next_ref->as.chunk->chunk_id, next_uuid);
+            printf("\t- next: %s\n", next_uuid);
+        } else {
+            printf("\t- next: (null)\n");
+        }
     } else {
-        printf("\t- next: (null)\n");
+        if (chunk->next_ref) {
+            printf("\t- next: %s\n", chunk->next_ref->as.hash);
+        } else {
+            printf("\t- next: (null)\n");   
+        }
     }
 
-    if (chunk->parent) {
-        char parent_uuid[37];
-        uuid_unparse_lower(chunk->parent->chunk_id, parent_uuid);
-        printf("\t- parent: %s\n", parent_uuid);
+    chunk_type_is_correct(chunk->parent_ref, type);
+    if (type == FULL) {
+        if (chunk->parent_ref && chunk->parent_ref->as.chunk) {
+            char parent_uuid[37];
+            uuid_unparse_lower(chunk->parent_ref->as.chunk->chunk_id, parent_uuid);
+            printf("\t- parent: %s\n", parent_uuid);
+        }
+    } else {
+        if (chunk->parent_ref) {
+            printf("\t- parent: %s\n", chunk->parent_ref->as.hash);
+        } else {
+            printf("\t- parent: (null)\n");   
+        }
     }
 
-    if (chunk->children.chunks) {
+    if (chunk->children_ref.chunk_refs) {
         printf("\t- children:\n");
 
-        for (size_t i = 0; i < chunk->children.n_chunks; i++) {
+        for (size_t i = 0; i < chunk->children_ref.size; i++) {
             char child_uuid[37];
-            uuid_unparse(chunk->children.chunks[i]->chunk_id, child_uuid);
-
-            printf("\t\t- child%zu: %s\n", i, child_uuid);
+            chunk_type_is_correct(chunk->children_ref.chunk_refs[i], type);
+            if (type == FULL) {
+                uuid_unparse(chunk->children_ref.chunk_refs[i]->as.chunk->chunk_id, child_uuid);
+                printf("\t\t- child%zu: %s\n", i, child_uuid);
+            } else {
+                printf("\t\t- child%zu: %s\n", i, chunk->children_ref.chunk_refs[i]->as.hash);
+            }
         }
     }
 }
 
 
-void chunks_visualize(chunks_t chunks) {
+void chunks_visualize(chunks_t chunks, ref_type type) {
     printf("=====================================\n");
+    printf("%zu hunks created\n", chunks.n_chunks);
     for (size_t n = 0; n < chunks.n_chunks; n++) {
-        chunk_visualize(chunks.chunks[n]);
+        chunk_visualize(chunks.chunks[n], type);
         printf("=====================================\n");
     }
 }
@@ -184,13 +231,15 @@ chunks_t _chunks_create_fixed_size_strategy(chunker_t *chunker, file_t *file) {
                 }
 
                 chunks[n_chunks] = chunk;
-                chunk_init(chunks[n_chunks]);
+                chunk_init(chunks[n_chunks], FULL);
                 chunk->content = chunk_contents;
                 chunk_compute_hash(chunk);
 
                 if (n_chunks > 0) {
-                    chunk->prev = chunks[n_chunks - 1];
-                    chunks[n_chunks - 1]->next = chunk;
+                    chunk->prev_ref->as.chunk = chunks[n_chunks - 1];
+                    chunks[n_chunks - 1]->next_ref->as.chunk = chunk;
+                    chunks[n_chunks - 1]->next_ref->as.chunk = chunk;
+                    
                 }
 
                 chunk->metadata = (chunk_metadata_t) {
@@ -268,13 +317,13 @@ chunks_t _chunks_create_sliding_window_strategy(chunker_t *chunker, file_t *file
                 }
 
                 chunks[n_chunks] = chunk;
-                chunk_init(chunks[n_chunks]);
+                chunk_init(chunks[n_chunks], FULL);
                 chunk->content = chunk_contents;
                 chunk_compute_hash(chunk);
 
                 if (n_chunks > 0) {
-                    chunk->prev = chunks[n_chunks - 1];
-                    chunks[n_chunks - 1]->next = chunk;
+                    chunk->prev_ref->as.chunk = chunks[n_chunks - 1];
+                    chunks[n_chunks - 1]->next_ref->as.chunk = chunk;
                 }
 
                 chunk->metadata = (chunk_metadata_t) {

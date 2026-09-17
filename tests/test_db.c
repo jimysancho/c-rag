@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,8 +23,8 @@ void test_db_insert(db_t *db) {
             .strategy = SLIDING_WINDOW_CHUNKING,
             .as = {
                 .sliding_window_params = {
-                    .window_size = 10,
-                    .overlap = 5
+                    .window_size = 5,
+                    .overlap = 2
                 }
             }
         }
@@ -37,6 +38,15 @@ void test_db_insert(db_t *db) {
         db_insert(db, chunks.chunks[s]);
     }
 
+    DIR *dir = opendir(db->path);
+    assert(dir != NULL);
+    closedir(dir);
+
+    char *dir_path = "./.db/068b9b27f53b6271d6e3c5e86ea55c3fa71fd0038f4ee8f793cf4cb05471ed36";
+    dir = opendir(dir_path);
+    assert(dir != NULL);
+    closedir(dir);
+
     chunks_free(chunks);
     free_files(&file, 1);
     return;
@@ -44,10 +54,10 @@ void test_db_insert(db_t *db) {
 
 
 void test_db_read(db_t *db) {
-    char *hash = "14f269c8869106cecb443419060edfec7c17c4292fbe7c3c78b0612411e6ed3f";
+    char *hash = "068b9b27f53b6271d6e3c5e86ea55c3fa71fd0038f4ee8f793cf4cb05471ed36";
     chunk_t *chunk = db_retrieve(db, hash);
     assert(strcmp(chunk->hash, hash) == 0);
-    chunk_visualize(chunk);
+    chunk_visualize(chunk, HASH);
     free(chunk);
     free(chunk->metadata.path);
     free(chunk->content);
@@ -56,11 +66,11 @@ void test_db_read(db_t *db) {
 
 void test_db_bulk_retrieve(db_t *db) {
     char *hash[5] = {
-        "14f269c8869106cecb443419060edfec7c17c4292fbe7c3c78b0612411e6ed3f",
-        "a6410f59433582413aaf1c43ffc846849b4bec39b4d77a67e9c7d168b3d7435a",
-        "cd6bc79f02509187926465e19a6ee122dae6a3f3964258ed26aead3f90d47662",
-        "43b814d8ee5809f46f51be42ad392994ff17f84fbedc1a65b807f17b54ab455c",
-        "aa12d262ec5f63ff71d7d4435b8a5ebd916f0b6b7cc0cc16d4f99085d1939606"
+        "068b9b27f53b6271d6e3c5e86ea55c3fa71fd0038f4ee8f793cf4cb05471ed36",
+        "47fbbdfb355104b07cb24b3a659e5b0c3e2f0cd213cf84b4bf62a8ea391668ee",
+        "89045b2b221968470d50170a8bd7e34bd45ffae84aa06ea29e5663962d1b6b04",
+        "e9b7328121a2aeb5306885a8730e36962d42244248a9b49e8dbc81217cd6cb7e",
+        "9e4b0c81416b607a7e7a9e7698c80751b6a9629ee0c85a3839f9f41a6c2cc59b"
     };
     chunks_t chunks = db_bulk_retrieve(
         db, hash, 5
@@ -75,15 +85,16 @@ void test_db_bulk_retrieve(db_t *db) {
         }
         assert(equal > 0);
     }
+    chunks_visualize(chunks, HASH);
 }
 
 int main() {
     db_t db = (db_t) {
         .path = "./.db",
-        .__created = 1
+        .__created = 0
     };
-    // test_db_insert(&db);
-    // test_db_read(&db);
+    test_db_insert(&db);
+    test_db_read(&db);
     test_db_bulk_retrieve(&db);
     return 0;
 }

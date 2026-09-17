@@ -8,6 +8,7 @@
 #include "ds.h"
 #include "json.h"
 #include "math.h"
+#include "db.h"
 
 #define N_THREADS 10
 
@@ -94,8 +95,8 @@ int main(int argc, char **argv) {
             .strategy = SLIDING_WINDOW_CHUNKING,
             .as = {
                 .sliding_window_params = {
-                    .window_size = 500,
-                    .overlap = 40
+                    .window_size = 5,
+                    .overlap = 2
                 }
             }
         }
@@ -127,7 +128,14 @@ int main(int argc, char **argv) {
 
     printf("%zu chunks created\n", chunks.n_chunks);
 
-    chunks_visualize(chunks);
+    chunks_visualize(chunks, FULL);
+
+    db_t db = (db_t) {
+        .path = "./.db",
+        .__created = 0
+    };
+
+    db_bulk_insert(&db, chunks);
 
     chunks_free(chunks);
     free_files(&file, 1);
