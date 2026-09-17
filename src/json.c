@@ -276,7 +276,10 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
         } else {
             // any other thing is an array 
             char *text_copy = strdup(&text[*curr]);
-            for (char *word = strtok(text_copy, ","); word != NULL; word = strtok(NULL, ",")) {
+            char *saveptr;
+            // NOTE: strtok is not thread safe. Therefore, when calling mulitple threads, internal state of strtok can 
+            // overlap, causing parsing issues
+            for (char *word = strtok_r(text_copy, ",", &saveptr); word != NULL; word = strtok_r(NULL, ",", &saveptr)) {
                 char *tmp_word;
                 int comma_offset = 0;
                 if (strstr(word, "]") != NULL) {
@@ -287,8 +290,10 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
                         return NULL;
                     }
                     size_t c = 0;
+                    size_t max_size = 32;
                     while (word[c] != ']') {
-                        if (c >= 32) {
+                        if (c >= max_size) {
+                            max_size *= 2;
                             tmp_word = realloc(tmp_word, strlen(tmp_word) * 2 + 1);
                             if (!tmp_word) {
                                 jlist_free(jlist);
@@ -335,6 +340,11 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
 
         if (text[*curr] != ',' && text[*curr] != ']') {
             printf("Wrong list. Expected ','; got: '%c' (%d)\n", text[*curr], *curr);
+            char temp[64];
+            memcpy(temp, &text[*curr - 10], 63);
+            temp[63] = '\0';
+            printf("temp -> %s\n", temp);
+            printf("%c\n", text[*curr - 1]);
             exit(1);
         } else if (text[*curr] == ',') {
             (*curr)++;

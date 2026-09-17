@@ -112,8 +112,6 @@ char *compute_embedding(char *content) {
         .size = 0
     };
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-
     curl = curl_easy_init();
 
     if (curl == NULL) {
@@ -205,7 +203,6 @@ char *compute_embedding(char *content) {
     free(escaped_content);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-    curl_global_cleanup();
 
     return response.data;
 }

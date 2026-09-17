@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <curl/curl.h>
 
 #include "parser.h"
 #include "chunk.h"
@@ -106,15 +107,18 @@ int main(int argc, char **argv) {
         &chunker, file
     );
 
-    //TODO: create a thread pool from which get tasks or something like that 
-    pthread_t threads[N_THREADS];
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    //TODO: create a thread pool from which get tasks or something like that
+    size_t n_threads = N_THREADS > chunks.n_chunks ? chunks.n_chunks : N_THREADS;
+    pthread_t threads[n_threads];
     thread_arg **args = malloc(sizeof(thread_arg *) * chunks.n_chunks);
     for (size_t index = 0; index < chunks.n_chunks; index++) {
         // NOTE: arg needs to be allocated, otherwise, its address will be the same always
         // and therefore it will become a race condition on the index
         thread_arg *arg = (thread_arg *)malloc(sizeof(thread_arg));
         if (!arg) exit(1);
-        arg->chunks = &chunks, 
+        arg->chunks = &chunks,
         arg->index = index;
         args[index] = arg;
         pthread_create(&threads[index], NULL, thread_compute_embedding, (void *)arg);
@@ -125,15 +129,19 @@ int main(int argc, char **argv) {
         free(args[index]);
     }
     free(args);
+    curl_global_cleanup();
 
     printf("%zu chunks created\n", chunks.n_chunks);
 
     chunks_visualize(chunks, FULL);
 
+    // NOTE: this has to be a startup type of operation, to avoid multiple threads trying to create it
     db_t db = (db_t) {
         .path = "./.db",
         .__created = 0
     };
+
+    init_db(&db);
 
     db_bulk_insert(&db, chunks);
 

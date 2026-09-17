@@ -58,6 +58,11 @@ void __create_db_folder(db_t *db) {
 }
 
 
+void init_db(db_t *db) {
+    __create_db_folder(db);
+}
+
+
 size_t db_insert(db_t *db, chunk_t *chunk) {
     __create_db_folder(db);
 
@@ -408,15 +413,6 @@ size_t db_delete(db_t *db, chunk_t *chunk) {
 }
 
 
-typedef struct __bulk_retrieve_t {
-    pthread_mutex_t *lock;
-    chunks_t *chunks;
-    size_t index;
-    char *hash;
-    db_t *db;
-} bulk_retrieve_t;
-
-
 void _add_chunk(chunks_t *chunks, 
                 chunk_t *chunk, 
                 size_t index,
@@ -445,7 +441,53 @@ void *retrieve_and_add(void *b_arg) {
 }
 
 
-size_t db_bulk_insert(db_t *db, chunks_t chunks);
+void *insert_and_add(void *b_arg) {
+    bulk_insert_arg_t *bulk_insert_arg = (bulk_insert_arg_t *)b_arg;
+    db_insert(bulk_insert_arg->db, bulk_insert_arg->chunk);
+    pthread_mutex_lock(bulk_insert_arg->lock);
+    (*bulk_insert_arg->count)++;
+    pthread_mutex_unlock(bulk_insert_arg->lock);
+    return NULL;
+}
+
+
+size_t db_bulk_insert(db_t *db, chunks_t chunks) {
+    pthread_mutex_t lock;
+    pthread_mutex_init(&lock, NULL);
+
+    size_t n_threads = N_THREADS > chunks.n_chunks ? chunks.n_chunks : N_THREADS;
+    pthread_t threads[n_threads];
+    size_t count = 0;
+    size_t index = 0;
+
+    bulk_insert_arg_t **args = malloc(sizeof(bulk_insert_arg_t *) * chunks.n_chunks);
+
+    while (count != chunks.n_chunks) {
+        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+            bulk_insert_arg_t *arg = malloc(sizeof(bulk_insert_arg_t));
+            if (!arg) exit(1);
+            arg->chunk = chunks.chunks[index];
+            arg->count = &count;
+            arg->db = db;
+            arg->lock = &lock;
+            args[index] = arg;
+            pthread_create(&threads[p_n], NULL, insert_and_add, (void *)arg);
+            index++;
+        }
+
+        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+            pthread_join(threads[p_n], NULL);
+        }
+    }
+
+    for (size_t i = 0; i < chunks.n_chunks; i++) {
+        free(args[i]);
+    }
+    free(args);
+    printf("%zu inserted chunks\n", count);
+    return count;
+}
+
 
 chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
     chunks_t retrieve_chunks = {
@@ -460,6 +502,7 @@ chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
     size_t n_threads = N_THREADS > size ? size : N_THREADS;
     pthread_t threads[n_threads];
     size_t index = 0;
+    bulk_retrieve_t **args = malloc(sizeof(bulk_retrieve_t *) * size);
 
     while (retrieve_chunks.n_chunks != size) {
         for (size_t p_n = 0; p_n < n_threads; p_n++) {
@@ -475,6 +518,7 @@ chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
                 printf("somethign went wrong -> %zu\n", index);
                 exit(1);
             }
+            args[index] = arg;
             index++;
         }
 
@@ -482,6 +526,11 @@ chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
             pthread_join(threads[p_n], NULL);
         }
     }
+
+    for (size_t i = 0; i < size; i++) {
+        free(args[i]);
+    }
+    free(args);
 
     pthread_mutex_destroy(&lock);
     return retrieve_chunks;
