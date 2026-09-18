@@ -3,7 +3,12 @@ CC := gcc
 OPENSSL_DIR := $(shell brew --prefix openssl@3)
 CURL_DIR := $(shell brew --prefix curl)
 
+SRC_DIR := src
+TEST_DIR := tests
+BUILD_DIR := build
+
 CFLAGS := -Wall -Wextra -Werror -std=c11 -g -MMD -MP
+CFLAGS += -I$(SRC_DIR)
 CFLAGS += -I$(OPENSSL_DIR)/include
 CFLAGS += -I$(CURL_DIR)/include
 
@@ -13,13 +18,9 @@ LDFLAGS += -L$(CURL_DIR)/lib
 LDLIBS := -lcrypto
 LDLIBS += -lcurl
 
-SRC_DIR := src
-TEST_DIR := tests
-BUILD_DIR := build
-
 TARGET := $(BUILD_DIR)/main
 
-SRC := $(wildcard $(SRC_DIR)/*.c)
+SRC := $(shell find $(SRC_DIR) -name '*.c')
 OBJ := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRC))
 
 TEST_SRC := $(wildcard $(TEST_DIR)/test_*.c)
@@ -37,7 +38,7 @@ $(TARGET): $(OBJ)
 	$(CC) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 

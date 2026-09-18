@@ -66,6 +66,7 @@ void init_db(db_t *db) {
 size_t db_insert(db_t *db, chunk_t *chunk) {
     __create_db_folder(db);
 
+    //TODO: check if the folder exists or not. If it does, then we need to update, not insert
     char *chunk_path = __path_join(db->path, chunk->hash);
     if (__create_folder_if_not_exists(chunk_path) != 0) {
         printf("Could not create folder for chunk: %s\n", chunk->hash);
@@ -189,9 +190,8 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     char *chunk_path = __path_join(db->path, hash);
     DIR *dir = opendir(chunk_path);
     if (errno == ENOENT) {
-        printf("Something went wrong with chunk %s -> %s\n", chunk_path, strerror(errno));
         free(chunk_path);
-        exit(1);
+        return NULL;
     }
 
     closedir(dir);

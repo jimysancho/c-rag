@@ -47,6 +47,7 @@ void chunk_free(chunk_t *chunk) {
     free(chunk->prev_ref);
     free(chunk->next_ref);
     free(chunk->parent_ref);
+    free(chunk->metadata.path);
     // if (chunk->embedding) {
     //     //NOTE -> not sure about this tbh
     //     free(chunk->embedding);
@@ -244,7 +245,7 @@ chunks_t _chunks_create_fixed_size_strategy(chunker_t *chunker, file_t *file) {
 
                 chunk->metadata = (chunk_metadata_t) {
                     .bytes = strlen(chunk_contents),
-                    .path = file->path,
+                    .path = strdup(file->path),
                     .strategy = chunker->strategy,
                     .start = start,
                     .end = i
@@ -328,7 +329,7 @@ chunks_t _chunks_create_sliding_window_strategy(chunker_t *chunker, file_t *file
 
                 chunk->metadata = (chunk_metadata_t) {
                     .bytes = strlen(chunk_contents),
-                    .path = file->path,
+                    .path = strdup(file->path),
                     .strategy = chunker->strategy,
                     .start = start,
                     .end = i
