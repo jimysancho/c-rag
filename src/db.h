@@ -4,11 +4,14 @@
 #include <stdio.h>
 #include <pthread.h>
 #include "chunk.h"
+#include "ds.h"
 
 
 typedef struct __db_t {
     char *path; // path where the db is
     size_t __created;
+    hash_map_t *keys;
+    pthread_mutex_t lock;
 } db_t;
 
 
@@ -30,6 +33,7 @@ typedef struct __bulk_insert_arg_t {
 
 
 void init_db(db_t *db);
+void destroy_db(db_t *db);
 
 // TODO: once we have sqlite we can save generic void data instead of assuming a chunk
 size_t db_insert(db_t *db, chunk_t *chunk);

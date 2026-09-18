@@ -10,6 +10,7 @@
 #define CHUNK_PREFIX
 #define N_THREADS 10
 #define CHILDREN_CAP 5
+#define BUCKETS 16
 
 
 size_t __create_folder_if_not_exists(char *path) {
@@ -60,6 +61,16 @@ void __create_db_folder(db_t *db) {
 
 void init_db(db_t *db) {
     __create_db_folder(db);
+    db->keys = malloc(sizeof(hash_map_t));
+    if (!db->keys) exit(1);
+    hash_map_init(db->keys, BUCKETS);
+    pthread_mutex_init(&db->lock, NULL);
+}
+
+
+void destroy_db(db_t *db) {
+    hash_map_free(db->keys);
+    pthread_mutex_destroy(&db->lock);
 }
 
 
@@ -174,11 +185,17 @@ size_t db_insert(db_t *db, chunk_t *chunk) {
 
     fclose(chunk_metadata_file);
 
+    char *emb_path = strdup(chunk_embedding_path);
+
     free(chunk_path);
     free(chunk_content_path);
     free(chunk_embedding_path);
     free(chunk_rel_path);
     free(chunk_metadata_path);
+
+    pthread_mutex_lock(&db->lock);
+    hash_map_insert(db->keys, chunk->hash, (void *)emb_path, sizeof(chunk->hash));
+    pthread_mutex_unlock(&db->lock);
 
     return 1;
 }
@@ -340,7 +357,7 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     }
     chunk->content = contents;
 
-    // TODO: load embedding, load relationships
+    // TODO: load embedding
     char *rel_line = NULL;
     ssize_t rel_read;
 

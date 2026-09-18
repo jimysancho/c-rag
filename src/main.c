@@ -11,6 +11,7 @@
 #include "math.h"
 #include "db.h"
 #include "pipeline/ingestion.h"
+#include "pipeline/retrieval.h"
 
 #define N_THREADS 10
 
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
 
     init_db(&db);
     
-    pipeline_ingestion_t pipeline = (pipeline_ingestion_t) {
+    pipeline_ingestion_t ingestion_pipeline = (pipeline_ingestion_t) {
         .chunker = &chunker,
         .db = &db,
         .n_threads = N_THREADS,
@@ -51,9 +52,23 @@ int main(int argc, char **argv) {
         .verbose = 0
     };
 
-    pipeline_result_t ingestion_result = pipeline_ingestion_run(pipeline);
+    pipeline_result_t ingestion_result = pipeline_ingestion_run(ingestion_pipeline);
+
+    retrieval_pipeline_t ret_pipeline = (retrieval_pipeline_t) {
+        .query = "test",
+        .db = &db,
+        .sim_th = 0.85,
+        .n_threads = ingestion_result.chunks.n_chunks,
+        .n_chunks = 4
+    };
+    retrieval_result_t retrieval_result = retrieval_pipeline_run(ret_pipeline);
+
+    printf("%zu retrieved chunks\n", retrieval_result.n_chunks);
+    for (size_t r = 0; r < retrieval_result.n_chunks; r++) {
+        retrieval_chunk_t *ret_chunk = retrieval_result.chunks[r];
+        printf("sim: %f -> %s\n", ret_chunk->similarity, ret_chunk->chunk->hash);
+    }
 
     chunks_free(ingestion_result.chunks);
-    chunks_free(ingestion_result.inserted_chunks);
     return 0;
 }

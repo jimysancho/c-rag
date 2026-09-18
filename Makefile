@@ -41,6 +41,8 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+-include $(OBJ:.o=.d)
+
 
 # ----------------
 # Tests

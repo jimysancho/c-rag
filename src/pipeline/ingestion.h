@@ -5,10 +5,10 @@
 #include "../db.h"
 
 
-typedef struct __thread_arg {
+typedef struct __ing_thread_arg {
     chunks_t *chunks;
     size_t index;
-} thread_arg;
+} ing_thread_arg;
 
 
 typedef struct __pipeline_ingestion_t {
@@ -22,7 +22,6 @@ typedef struct __pipeline_ingestion_t {
 
 typedef struct __pipeline_result_t {
     chunks_t chunks;
-    chunks_t inserted_chunks;
     float time;
 } pipeline_result_t;
 
