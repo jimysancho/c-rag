@@ -44,9 +44,9 @@ void chunk_init(chunk_t *chunk, ref_type type) {
 
 void chunk_free(chunk_t *chunk) {
     free(chunk->content);
-    free(chunk->prev_ref);
-    free(chunk->next_ref);
-    free(chunk->parent_ref);
+    if (chunk->prev_ref) free(chunk->prev_ref);
+    if (chunk->next_ref) free(chunk->next_ref);
+    if (chunk->parent_ref) free(chunk->parent_ref);
     free(chunk->metadata.path);
     // if (chunk->embedding) {
     //     //NOTE -> not sure about this tbh

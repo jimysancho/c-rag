@@ -38,12 +38,11 @@ pipeline_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
         pipeline.chunker, file
     );
 
-    
     chunks_t chunks_to_insert = (chunks_t) {
         .chunks = malloc(sizeof(chunk_t) * chunks.n_chunks),
         .n_chunks = 0
     };
-    
+
     if (!chunks_to_insert.chunks) exit(1);
     for (size_t c = 0; c < chunks.n_chunks; c++) {
         chunk_t *chunk = db_retrieve(pipeline.db, chunks.chunks[c]->hash);
@@ -101,7 +100,10 @@ pipeline_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
 
     db_bulk_insert(pipeline.db, chunks);
     free_files(&file, 1);
-    chunks_free(chunks_to_insert);
+    //TODO: instead of having a dynamic array, use regular array to store
+    // chunks_to_insert
+
+    free(chunks_to_insert.chunks);
     return (pipeline_result_t) {
         .chunks = chunks,
         .time = 0

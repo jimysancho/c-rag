@@ -75,5 +75,6 @@ run: all
 
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf ./.db
 
 .PHONY: all tests run clean

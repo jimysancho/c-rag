@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
     pipeline_result_t ingestion_result = pipeline_ingestion_run(ingestion_pipeline);
 
     retrieval_pipeline_t ret_pipeline = (retrieval_pipeline_t) {
-        .query = "test",
+        .query = "and being able to create",
         .db = &db,
         .sim_th = 0.85,
         .n_threads = ingestion_result.chunks.n_chunks,

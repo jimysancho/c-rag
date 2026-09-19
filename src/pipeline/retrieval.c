@@ -39,7 +39,8 @@ void *load_chunk_embedding_and_add(void *arg) {
                                                            ret_arg->sim_th);
     if (!ret_chunk) return NULL;
     pthread_mutex_lock(ret_arg->lock);
-    ret_arg->chunks[*(ret_arg->index)++] = ret_chunk;
+    ret_arg->chunks[*(ret_arg->index)] = ret_chunk;
+    (*ret_arg->index)++;
     pthread_mutex_unlock(ret_arg->lock);
     return NULL;
 }
@@ -60,11 +61,11 @@ retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
     size_t index = 0;
     size_t count = 0;
 
-    retrieval_chunk_t **retrieved_chunks = malloc(sizeof(retrieval_chunk_t *) * pipeline.n_chunks);
+    retrieval_chunk_t **retrieved_chunks = malloc(sizeof(retrieval_chunk_t *) * chunks_hash.n_keys);
     ret_thread_arg **args = malloc(sizeof(ret_thread_arg *) * chunks_hash.n_keys);
-    if (!args) exit(1);
+    if (!args || !retrieved_chunks) exit(1);
 
-    size_t n_threads = pipeline.n_threads < chunks_hash.n_keys ? pipeline.n_threads : chunks_hash.n_keys;
+    size_t n_threads = chunks_hash.n_keys; // pipeline.n_threads < chunks_hash.n_keys ? pipeline.n_threads : chunks_hash.n_keys;
 
     pthread_t threads[n_threads];
     pthread_mutex_t lock;
@@ -95,8 +96,10 @@ retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
     free(args);
     pthread_mutex_destroy(&lock);
 
+    //TODO: order retrieved_chunks by sim, and then resize 
+
     return (retrieval_result_t) {
         .chunks = retrieved_chunks,
-        .n_chunks = 0
+        .n_chunks = count
     };
 }

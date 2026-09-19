@@ -34,10 +34,13 @@ size_t __create_folder_if_not_exists(char *path) {
 
 
 char *__path_join(char *s1, char *s2) {
-    size_t size = strlen(s1) + strlen(s2) + 1 + 1;
+    size_t s1_len = strlen(s1);
+    size_t size = s1_len + strlen(s2) + 1 + 1;
     char *s1_copy = malloc(size);
     if (!s1_copy) exit(1);
-    memcpy(s1_copy, s1, strlen(s1));
+    memcpy(s1_copy, s1, s1_len);
+    // strcat needs the destination to already be a valid string
+    s1_copy[s1_len] = '\0';
     s1_copy = strcat(s1_copy, "/");
     s1_copy = strcat(s1_copy, s2);
     s1_copy[size - 1] = '\0';
@@ -194,10 +197,40 @@ size_t db_insert(db_t *db, chunk_t *chunk) {
     free(chunk_metadata_path);
 
     pthread_mutex_lock(&db->lock);
-    hash_map_insert(db->keys, chunk->hash, (void *)emb_path, sizeof(chunk->hash));
+    //NOTE: we need to pass a copy so later on we can free things properly
+    hash_map_insert(db->keys, strdup(chunk->hash), (void *)emb_path, sizeof(chunk->hash));
     pthread_mutex_unlock(&db->lock);
 
     return 1;
+}
+
+
+void load_embeddings(char *path, chunk_t *chunk) {
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        printf("Path %s does not exist\n", path);
+        exit(1);
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        perror("fseek");
+        exit(1);
+    }
+    long n_file_bytes = ftell(file);
+    fseek(file, 0, 0);
+    char *contents = malloc(n_file_bytes);
+
+    size_t nread = fread(contents, 1, n_file_bytes, file);
+    fclose(file);
+
+    contents[nread] = '\0';
+    size_t dim = 0;
+
+    char *savepointer;
+    for (char *word = strtok_r(contents, ",", &savepointer); word != NULL; word = strtok_r(NULL, ",", &savepointer)) {
+        chunk->embedding[dim] = atof(word);
+        dim++;
+    }
+    free(contents);
 }
 
 
@@ -219,13 +252,12 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     rel_path = __path_join(chunk_path, "relationships");
     metadata_path = __path_join(chunk_path, "metadata");
 
-    FILE *content_file, *embedding_file, *rel_file, *metadata_file;
+    FILE *content_file, *rel_file, *metadata_file;
     content_file = fopen(content_path, "r");
-    embedding_file = fopen(embedding_path, "r");
     rel_file = fopen(rel_path, "r");
     metadata_file = fopen(metadata_path, "r");
 
-    if (!content_file || !embedding_file || !rel_file || !metadata_file) {
+    if (!content_file || !rel_file || !metadata_file) {
         printf("Corruption of chunk %s. Missing content_file\n", chunk_path);
         free(chunk_path);
         free(content_path);
@@ -233,7 +265,6 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
         free(metadata_path);
 
         if (content_file) fclose(content_file);
-        if (embedding_file) fclose(embedding_file);
         if (rel_file) fclose(rel_file);
         if (metadata_file) fclose(metadata_file);
         exit(1);
@@ -248,7 +279,6 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
         free(metadata_path);
 
         if (content_file) fclose(content_file);
-        if (embedding_file) fclose(embedding_file);
         if (rel_file) fclose(rel_file);
         if (metadata_file) fclose(metadata_file);
         exit(1);
@@ -324,7 +354,6 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
         if (!contents) {
             fclose(content_file);
             fclose(rel_file);
-            fclose(embedding_file);
             fclose(metadata_file);
 
             free(chunk_path);
@@ -341,7 +370,6 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
             printf("bytes read vs actually read: %zu %zu\n", (size_t)chunk->metadata.bytes + 1, nread);
             fclose(content_file);
             fclose(rel_file);
-            fclose(embedding_file);
             fclose(metadata_file);
 
             free(chunk_path);
@@ -357,7 +385,8 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
     }
     chunk->content = contents;
 
-    // TODO: load embedding
+    load_embeddings(embedding_path, chunk);
+
     char *rel_line = NULL;
     ssize_t rel_read;
 
@@ -387,7 +416,7 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
             // the rest are children
             case 3: {
                     if (strcmp(rel_line, "\n") == 0) break;
-                    children.chunk_refs = malloc(sizeof(chunk_t) * CHILDREN_CAP);
+                    children.chunk_refs = malloc(sizeof(chunk_t *) * CHILDREN_CAP);
                     memcpy(children.chunk_refs[children.size++]->as.hash, rel_line, 64);
                     children.chunk_refs[children.size]->as.hash[64] = '\0';
                 }
@@ -416,7 +445,6 @@ chunk_t *db_retrieve(db_t *db, char *hash) {
 
     fclose(content_file);
     fclose(rel_file);
-    fclose(embedding_file);
     fclose(metadata_file);
 
     return chunk;
