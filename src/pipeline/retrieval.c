@@ -46,6 +46,28 @@ void *load_chunk_embedding_and_add(void *arg) {
 }
 
 
+void retrieved_chunks_sort(retrieval_chunk_t ***retrieved_chunks_ptr, size_t size, size_t n_chunks) {
+    printf("Sorting retrieved chunks: %zu\n", size);
+    retrieval_chunk_t **retrieved_chunks = *retrieved_chunks_ptr;
+
+    while (1) {
+        size_t swap = 0;        
+        for (size_t c = 0; c < size - 1; c++) {
+            retrieval_chunk_t *c1 = retrieved_chunks[c];
+            retrieval_chunk_t *c2 = retrieved_chunks[c + 1];
+            if (c1->similarity < c2->similarity) {
+                retrieval_chunk_t *tmp = c1;
+                retrieved_chunks[c] = retrieved_chunks[c + 1];
+                retrieved_chunks[c + 1] = tmp;
+                swap = 1;
+            }
+        }
+        if (!swap) break;
+    }
+    *retrieved_chunks_ptr = realloc(retrieved_chunks, sizeof(retrieval_chunk_t *) * n_chunks);
+}
+
+
 retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
 
     char *response = compute_embedding(pipeline.query);
@@ -96,10 +118,10 @@ retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
     free(args);
     pthread_mutex_destroy(&lock);
 
-    //TODO: order retrieved_chunks by sim, and then resize 
+    retrieved_chunks_sort(&retrieved_chunks, count, pipeline.n_chunks);
 
     return (retrieval_result_t) {
         .chunks = retrieved_chunks,
-        .n_chunks = count
+        .n_chunks = pipeline.n_chunks > count ? count : pipeline.n_chunks
     };
 }

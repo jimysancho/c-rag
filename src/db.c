@@ -219,9 +219,11 @@ void load_embeddings(char *path, chunk_t *chunk) {
     fseek(file, 0, 0);
     char *contents = malloc(n_file_bytes);
 
+    //NOTE: 1 byte size and n_file_bytes to read
     size_t nread = fread(contents, 1, n_file_bytes, file);
     fclose(file);
 
+    //NOTE: important to add this
     contents[nread] = '\0';
     size_t dim = 0;
 
