@@ -16,6 +16,6 @@ size_t write_callback(void *contents,
 
                              
 char *compute_embedding(char *content);
-
+char *compute_answer(char *system_prompt, char *user_prompt);
 
 #endif

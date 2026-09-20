@@ -206,3 +206,184 @@ char *compute_embedding(char *content) {
 
     return response.data;
 }
+
+
+char *compute_answer(char *system_prompt, char *user_prompt) {
+    CURL *curl;
+    CURLcode res;
+
+    response_t response = {
+        .data = NULL,
+        .size = 0
+    };
+
+    curl = curl_easy_init();
+
+    if (curl == NULL) {
+        fprintf(stderr, "Failed to initialize curl\n");
+        exit(1);
+    }
+
+    const char *api_key = getenv("OPENAI_API_KEY");
+
+    if (api_key == NULL) {
+        fprintf(stderr, "OPENAI_API_KEY is not set\n");
+        curl_easy_cleanup(curl);
+        exit(1);
+    }
+
+    curl_easy_setopt(
+        curl,
+        CURLOPT_URL,
+        "https://api.openai.com/v1/chat/completions"
+    );
+
+    struct curl_slist *headers = NULL;
+
+    headers = curl_slist_append(
+        headers,
+        "Content-Type: application/json"
+    );
+
+    char auth_header[1024];
+
+    snprintf(
+        auth_header,
+        sizeof(auth_header),
+        "Authorization: Bearer %s",
+        api_key
+    );
+
+    headers = curl_slist_append(
+        headers,
+        auth_header
+    );
+
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    curl_easy_setopt(
+        curl,
+        CURLOPT_WRITEFUNCTION,
+        write_callback
+    );
+
+    curl_easy_setopt(
+        curl,
+        CURLOPT_WRITEDATA,
+        &response
+    );
+
+    // Escape prompts for JSON
+    char *escaped_system = json_escape(system_prompt);
+    char *escaped_user = json_escape(user_prompt);
+
+    if (escaped_system == NULL || escaped_user == NULL) {
+        fprintf(stderr, "Failed to escape prompts\n");
+        free(escaped_system);
+        free(escaped_user);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        exit(1);
+    }
+
+    // Compute JSON body length
+    int len = snprintf(
+        NULL,
+        0,
+        "{"
+            "\"model\":\"gpt-4.1-mini\","
+            "\"messages\":["
+                "{"
+                    "\"role\":\"system\","
+                    "\"content\":\"%s\""
+                "},"
+                "{"
+                    "\"role\":\"user\","
+                    "\"content\":\"%s\""
+                "}"
+            "]"
+        "}",
+        escaped_system,
+        escaped_user
+    );
+
+    if (len < 0) {
+        fprintf(stderr, "Could not compute JSON length\n");
+        free(escaped_system);
+        free(escaped_user);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        exit(1);
+    }
+
+    char *json = malloc((size_t)len + 1);
+
+    if (json == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        free(escaped_system);
+        free(escaped_user);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        exit(1);
+    }
+
+    snprintf(
+        json,
+        (size_t)len + 1,
+        "{"
+            "\"model\":\"gpt-4.1-mini\","
+            "\"messages\":["
+                "{"
+                    "\"role\":\"system\","
+                    "\"content\":\"%s\""
+                "},"
+                "{"
+                    "\"role\":\"user\","
+                    "\"content\":\"%s\""
+                "}"
+            "]"
+        "}",
+        escaped_system,
+        escaped_user
+    );
+
+    printf("Json being sent to generation: %s\n", json);
+
+    curl_easy_setopt(curl, CURLOPT_POST, 1L);
+
+    curl_easy_setopt(
+        curl,
+        CURLOPT_POSTFIELDS,
+        json
+    );
+
+    curl_easy_setopt(
+        curl,
+        CURLOPT_POSTFIELDSIZE,
+        (long)len
+    );
+
+    res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        fprintf(
+            stderr,
+            "Request failed: %s\n",
+            curl_easy_strerror(res)
+        );
+    } else {
+        printf(
+            "Response (%zu bytes)\n",
+            response.size
+        );
+    }
+
+    free(json);
+    free(escaped_system);
+    free(escaped_user);
+
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    return response.data;
+}

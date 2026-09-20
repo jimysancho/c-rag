@@ -27,7 +27,7 @@ void *thread_compute_embedding(void *arg) {
 }
 
 
-pipeline_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
+ingestion_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
     file_t *file = load_file_contents(pipeline.path);
     if (!file) {
         perror("Something went wrong loading the file\n");
@@ -104,7 +104,7 @@ pipeline_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
     // chunks_to_insert
 
     free(chunks_to_insert.chunks);
-    return (pipeline_result_t) {
+    return (ingestion_result_t) {
         .chunks = chunks,
         .time = 0
     };

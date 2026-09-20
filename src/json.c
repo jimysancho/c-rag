@@ -140,7 +140,7 @@ char *json_parse_string_value(char *text, int *curr) {
     size_t start = *curr;
     char keyword[5];
     size_t i = 0;
-    while (text[*curr] != '"' && text[*curr - 1] != '\'') {
+    while (text[*curr] != '"' || text[*curr - 1] == '\\') {
         if (i <= 3) {
             keyword[i] = text[*curr];
         } else if (i == 4) {
@@ -337,7 +337,7 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
             }
             free(text_copy);
         }
-
+        skip_whitespace(text, curr);
         if (text[*curr] != ',' && text[*curr] != ']') {
             printf("Wrong list. Expected ','; got: '%c' (%d)\n", text[*curr], *curr);
             char temp[64];

@@ -68,6 +68,33 @@ void init_db(db_t *db) {
     if (!db->keys) exit(1);
     hash_map_init(db->keys, BUCKETS);
     pthread_mutex_init(&db->lock, NULL);
+
+    if (db->__created) {
+        // we need to load the chunks inside "./.db folder"
+        DIR *db_dir = opendir(db->path);
+        if (!db_dir) exit(1);
+        
+        struct dirent *entry;
+
+        while ((entry = readdir(db_dir)) != NULL) {
+            if (strcmp(entry->d_name, ".") == 0 ||
+                strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+            char *chunk_path = __path_join(db->path, entry->d_name);
+            char *emb_path = __path_join(chunk_path, "embedding");
+            char *hash = strdup(entry->d_name);
+            if (!hash) exit(1);
+            hash_map_insert(
+                db->keys,
+                hash,
+                (void*)emb_path,
+                strlen(hash) + 1
+            );
+            free(chunk_path);
+        }
+        closedir(db_dir);
+    }
 }
 
 

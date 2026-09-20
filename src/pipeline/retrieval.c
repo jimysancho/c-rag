@@ -64,6 +64,11 @@ void retrieved_chunks_sort(retrieval_chunk_t ***retrieved_chunks_ptr, size_t siz
         }
         if (!swap) break;
     }
+
+    for (size_t c = n_chunks + 1; c < size; c++) {
+        chunk_free(retrieved_chunks[c]->chunk);
+    }
+
     *retrieved_chunks_ptr = realloc(retrieved_chunks, sizeof(retrieval_chunk_t *) * n_chunks);
 }
 
@@ -118,7 +123,9 @@ retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
     free(args);
     pthread_mutex_destroy(&lock);
 
-    retrieved_chunks_sort(&retrieved_chunks, count, pipeline.n_chunks);
+    if (count) {
+        retrieved_chunks_sort(&retrieved_chunks, count, pipeline.n_chunks);
+    };
 
     return (retrieval_result_t) {
         .chunks = retrieved_chunks,

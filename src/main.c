@@ -12,17 +12,13 @@
 #include "db.h"
 #include "pipeline/ingestion.h"
 #include "pipeline/retrieval.h"
+#include "pipeline/pipeline.h"
+#include "pipeline/generation.h"
 
 #define N_THREADS 10
 
 
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        printf("Error: you must provide the path of the file\n");
-        exit(1);
-    }
-    char *path = argv[1];
-
+void retrieval(char *path) {
     // NOTE: this has to be a startup type of operation, to avoid multiple threads trying to create it
     db_t db = (db_t) {
         .path = "./.db",
@@ -52,12 +48,12 @@ int main(int argc, char **argv) {
         .verbose = 0
     };
 
-    pipeline_result_t ingestion_result = pipeline_ingestion_run(ingestion_pipeline);
+    ingestion_result_t ingestion_result = pipeline_ingestion_run(ingestion_pipeline);
 
     retrieval_pipeline_t ret_pipeline = (retrieval_pipeline_t) {
         .query = "and being able to create",
         .db = &db,
-        .sim_th = 0.85,
+        .sim_th = 0.15,
         .n_threads = ingestion_result.chunks.n_chunks,
         .n_chunks = 4
     };
@@ -70,5 +66,49 @@ int main(int argc, char **argv) {
     }
 
     chunks_free(ingestion_result.chunks);
+    return;
+}
+
+
+int main(int argc, char **argv) {
+    if (argc < 3) {
+        printf("Error: you must provide the path of the file and the query\n");
+        exit(1);
+    }
+    char *path = argv[1];
+    (void)path;
+    char *query = argv[2];
+
+    db_t db = (db_t) {
+        .path = "./.db",
+        .__created = 1
+    };
+    init_db(&db);
+
+    generation_pipeline_t gen_pipeline = (generation_pipeline_t) {
+        .model = "something for now",
+        .query = query
+    };
+
+    retrieval_pipeline_t ret_pipeline = (retrieval_pipeline_t) {
+        .db = &db,
+        .n_chunks = 5,
+        .n_threads = 5,
+        .query = query,
+        .sim_th = 0.05
+    };
+
+    pipeline_t pipeline = (pipeline_t) {
+        .generation_pipeline = &gen_pipeline,
+        .retrieval_pipeline = &ret_pipeline 
+    };
+
+    pipeline_result_t result = pipeline_run(
+        pipeline
+    );
+
+    printf("Content -> %s\n", result.gen_result.response);
+    hash_map_free(db.keys);
+    
     return 0;
 }

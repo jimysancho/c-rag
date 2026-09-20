@@ -20,11 +20,11 @@ typedef struct __pipeline_ingestion_t {
 } pipeline_ingestion_t;
 
 
-typedef struct __pipeline_result_t {
+typedef struct __ingestion_result_t {
     chunks_t chunks;
     float time;
-} pipeline_result_t;
+} ingestion_result_t;
 
 
-pipeline_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline);
+ingestion_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline);
 #endif
