@@ -536,8 +536,10 @@ size_t db_bulk_insert(db_t *db, chunks_t chunks) {
 
     bulk_insert_arg_t **args = malloc(sizeof(bulk_insert_arg_t *) * chunks.n_chunks);
 
+    // batch is needed for the reaining ones in the last batch
     while (count != chunks.n_chunks) {
-        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+        size_t batch = chunks.n_chunks - index < n_threads ? chunks.n_chunks - index : n_threads;
+        for (size_t p_n = 0; p_n < batch; p_n++) {
             bulk_insert_arg_t *arg = malloc(sizeof(bulk_insert_arg_t));
             if (!arg) exit(1);
             arg->chunk = chunks.chunks[index];
@@ -549,7 +551,7 @@ size_t db_bulk_insert(db_t *db, chunks_t chunks) {
             index++;
         }
 
-        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+        for (size_t p_n = 0; p_n < batch; p_n++) {
             pthread_join(threads[p_n], NULL);
         }
     }
@@ -579,7 +581,8 @@ chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
     bulk_retrieve_t **args = malloc(sizeof(bulk_retrieve_t *) * size);
 
     while (retrieve_chunks.n_chunks != size) {
-        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+        size_t batch = size - index < n_threads ? size - index : n_threads;
+        for (size_t p_n = 0; p_n < batch; p_n++) {
             bulk_retrieve_t *arg = malloc(sizeof(bulk_retrieve_t));
             if (!arg) exit(1);
             arg->chunks = &retrieve_chunks;
@@ -588,15 +591,11 @@ chunks_t db_bulk_retrieve(db_t *db, char **hash, size_t size) {
             arg->lock = &lock;
             arg->index = index;
             pthread_create(&threads[p_n], NULL, retrieve_and_add, (void *)arg);
-            if (index >= size) {
-                printf("somethign went wrong -> %zu\n", index);
-                exit(1);
-            }
             args[index] = arg;
             index++;
         }
 
-        for (size_t p_n = 0; p_n < n_threads; p_n++) {
+        for (size_t p_n = 0; p_n < batch; p_n++) {
             pthread_join(threads[p_n], NULL);
         }
     }

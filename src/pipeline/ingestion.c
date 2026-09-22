@@ -13,6 +13,7 @@ void *thread_compute_embedding(void *arg) {
     ing_thread_arg *t_arg = (ing_thread_arg *)arg;
 
     char *response = compute_embedding(t_arg->chunks->chunks[t_arg->index]->content);
+    printf("Response -> %s\n", response);
     json_object_t *j = json_parse(response);
     float embedding[1536] = {0};
     get_embedding_from_json(j, embedding);
@@ -33,10 +34,24 @@ ingestion_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
         perror("Something went wrong loading the file\n");
         exit(1);
     }
+    
+    if (pipeline.verbose) {
+        printf("%s loaded. %zu bytes\n", file->path, file->bytes);
+        size_t size = 100;
+        char temp[size];
+        memcpy(temp, file->contents, size - 1);
+        temp[size - 1] = '\0';
+        printf("Excerpt: \n%s\n", temp);
+        printf("=====================\n");
+    }
 
     chunks_t chunks = chunks_create(
         pipeline.chunker, file
     );
+
+    if (pipeline.verbose) {
+        printf("%zu chunks created\n", chunks.n_chunks);
+    }
 
     chunks_t chunks_to_insert = (chunks_t) {
         .chunks = malloc(sizeof(chunk_t) * chunks.n_chunks),
@@ -70,7 +85,8 @@ ingestion_result_t pipeline_ingestion_run(pipeline_ingestion_t pipeline) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     //TODO: create a thread pool from which get tasks or something like that
-    size_t n_threads = pipeline.n_threads > chunks_to_insert.n_chunks ? chunks_to_insert.n_chunks : pipeline.n_threads;
+    size_t n_threads = chunks_to_insert.n_chunks; // pipeline.n_threads > chunks_to_insert.n_chunks ? chunks_to_insert.n_chunks : pipeline.n_threads;
+    printf("Total threads: %zu\n", n_threads);
     pthread_t threads[n_threads];
     ing_thread_arg **args = malloc(sizeof(ing_thread_arg *) * chunks.n_chunks);
     for (size_t index = 0; index < chunks_to_insert.n_chunks; index++) {

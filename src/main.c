@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -18,7 +19,7 @@
 #define N_THREADS 10
 
 
-void retrieval(char *path) {
+void ingest(char *path) {
     // NOTE: this has to be a startup type of operation, to avoid multiple threads trying to create it
     db_t db = (db_t) {
         .path = "./.db",
@@ -31,8 +32,8 @@ void retrieval(char *path) {
             .strategy = SLIDING_WINDOW_CHUNKING,
             .as = {
                 .sliding_window_params = {
-                    .window_size = 5,
-                    .overlap = 2
+                    .window_size = 100,
+                    .overlap = 20
                 }
             }
         }
@@ -45,26 +46,11 @@ void retrieval(char *path) {
         .db = &db,
         .n_threads = N_THREADS,
         .path = path,
-        .verbose = 0
+        .verbose = 1
     };
 
     ingestion_result_t ingestion_result = pipeline_ingestion_run(ingestion_pipeline);
-
-    retrieval_pipeline_t ret_pipeline = (retrieval_pipeline_t) {
-        .query = "and being able to create",
-        .db = &db,
-        .sim_th = 0.15,
-        .n_threads = ingestion_result.chunks.n_chunks,
-        .n_chunks = 4
-    };
-    retrieval_result_t retrieval_result = retrieval_pipeline_run(ret_pipeline);
-
-    printf("%zu retrieved chunks\n", retrieval_result.n_chunks);
-    for (size_t r = 0; r < retrieval_result.n_chunks; r++) {
-        retrieval_chunk_t *ret_chunk = retrieval_result.chunks[r];
-        printf("sim: %f -> %s\n", ret_chunk->similarity, ret_chunk->chunk->hash);
-    }
-
+    printf("%zu chunks inserted\n", ingestion_result.chunks.n_chunks);
     chunks_free(ingestion_result.chunks);
     return;
 }
@@ -76,15 +62,24 @@ int main(int argc, char **argv) {
         exit(1);
     }
     char *path = argv[1];
-    (void)path;
     char *query = argv[2];
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
+    char *db_path = "./.db";
+
+    DIR *db_dir = opendir(db_path);
     db_t db = (db_t) {
         .path = "./.db",
-        .__created = 1
+        .__created = 0
     };
+
+    if (db_dir) {
+        db.__created = 1;
+        closedir(db_dir);
+    } else {
+        ingest(path);
+    }
     init_db(&db);
 
     generation_pipeline_t gen_pipeline = (generation_pipeline_t) {

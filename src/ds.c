@@ -203,7 +203,7 @@ h_object_t *hash_map_get(hash_map_t *h, char *key) {
     ll_t *ll = h->buckets[bucket];
 
     if (ll == NULL) {
-        printf("Bucket %zu uninitialized\n", bucket);
+        printf("Bucket %zu uninitialized (key = %s)\n", bucket, key);
         exit(1);
     }
 

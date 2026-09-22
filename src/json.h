@@ -56,6 +56,7 @@ void skip_whitespace(char *text, int *curr);
 char *json_extract_key(char *text, int *curr);
 
 char *json_parse_string_value(char *text, int *curr);
+char *json_parse_number_value(char *text, int *curr, int *is_float);
 jlist_t *json_parse_list_value(char *text, int *curr);
 hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr);
 json_object_t *json_parse(char *text);

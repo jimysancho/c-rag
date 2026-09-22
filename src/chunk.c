@@ -27,12 +27,15 @@ void chunk_init(chunk_t *chunk, ref_type type) {
     };
     chunk->next_ref = malloc(sizeof(chunk_ref_t));
     if (!chunk->next_ref) exit(1);
+    memset(chunk->next_ref, 0, sizeof(chunk_ref_t));
     chunk->next_ref->type = type;
     chunk->prev_ref = malloc(sizeof(chunk_ref_t));
     if (!chunk->prev_ref) exit(1);
+    memset(chunk->prev_ref, 0, sizeof(chunk_ref_t));
     chunk->prev_ref->type = type;
     chunk->parent_ref = malloc(sizeof(chunk_ref_t));
-    if (!chunk->prev_ref) exit(1);
+    if (!chunk->parent_ref) exit(1);
+    memset(chunk->parent_ref, 0, sizeof(chunk_ref_t));
     chunk->parent_ref->type = type;
     chunk->metadata = (chunk_metadata_t) {
         .bytes = 0,

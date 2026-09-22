@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "json.h"
 #include "ds.h"
 
@@ -185,6 +186,42 @@ char *json_parse_string_value(char *text, int *curr) {
 }
 
 
+// needed in case we receive numbers of more than 1 digit in places 
+// different from embedding
+char *json_parse_number_value(char *text, int *curr, int *is_float) {
+    size_t start = *curr;
+    *is_float = 0;
+
+    if (text[*curr] == '-') (*curr)++;
+    while (isdigit((unsigned char)text[*curr])) (*curr)++;
+
+    if (text[*curr] == '.') {
+        *is_float = 1;
+        (*curr)++;
+        while (isdigit((unsigned char)text[*curr])) (*curr)++;
+    }
+    if (text[*curr] == 'e' || text[*curr] == 'E') {
+        *is_float = 1;
+        (*curr)++;
+        if (text[*curr] == '+' || text[*curr] == '-') (*curr)++;
+        while (isdigit((unsigned char)text[*curr])) (*curr)++;
+    }
+
+    size_t len = *curr - start;
+    char *num_str = malloc(len + 1);
+    if (!num_str) return NULL;
+
+    memcpy(num_str, &text[start], len);
+    num_str[len] = '\0';
+
+#ifdef DEBUG
+    printf("Number extracted: %s\n", num_str);
+#endif
+
+    return num_str;
+}
+
+
 char *json_extract_key(char *text, int *curr) {
     skip_whitespace(text, curr);
     while (text[*curr] != '"') (*curr)++;
@@ -215,7 +252,7 @@ char *json_extract_key(char *text, int *curr) {
     // now we need to extract the value. the value itself can be another json, a string, etc
     skip_whitespace(text, curr);
     if (text[*curr] != ':') {
-        printf("Wrong json\n");
+        printf("Wrong json -> %c\n", text[*curr]);
         free(key);
         return NULL;
     }
@@ -357,7 +394,7 @@ jlist_t *json_parse_list_value(char *text, int *curr) {
 
 hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
 
-    while (text[*curr] != '}') {
+    while (text[*curr] != '}' && text[*curr] != '\0') {
         #ifdef DEBUG
         printf("Current character: %c\n", text[*curr]);
         #endif
@@ -442,6 +479,7 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
                 break;
             }
     
+            case '-':
             case '0':
             case '1':
             case '2':
@@ -451,12 +489,29 @@ hash_map_t *json_parse_bracket(hash_map_t *json, char *text, int *curr) {
             case '6':
             case '7':
             case '8':
-            case '9':
-                // integer or float
-                free(key);
-                free(obj);
-                (*curr)++;
+            case '9': {
+                int is_float = 0;
+                char *num_str = json_parse_number_value(text, curr, &is_float);
+                if (!num_str) {
+                    free(key);
+                    free(obj);
+                    hash_map_free(json);
+                    return NULL;
+                }
+                if (is_float) {
+                    obj->type = FLOAT;
+                    obj->as.flt = strtof(num_str, NULL);
+                } else {
+                    obj->type = INTEGER;
+                    obj->as.integer = atoi(num_str);
+                }
+                #ifdef DEBUG
+                printf("Number value inserted in hash map -> %s\n", num_str);
+                #endif
+                free(num_str);
+                hash_map_insert(json, key, (void *)obj, sizeof(obj));
                 break;
+            }
             case '"': 
             default: {
                 char *string_value = json_parse_string_value(text, curr);
@@ -503,7 +558,6 @@ json_object_t *json_parse(char *text) {
     #ifdef DEBUG
     printf("Parsing text: %s\n", &text[curr]);
     #endif
-
 
     while (text[curr] != '{') (curr)++;
 
