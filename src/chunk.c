@@ -304,7 +304,7 @@ chunks_t _chunks_create_sliding_window_strategy(chunker_t *chunker, file_t *file
 
                 if (n_chunks >= current_capacity) {
                     current_capacity *= 2;
-                    chunks = realloc(chunks, current_capacity);
+                    chunks = realloc(chunks, sizeof(chunk_t *) * current_capacity);
                     if (!chunks) {
                         printf("Reallocation of chunks failed\n");
                         exit(1);
