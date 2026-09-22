@@ -24,4 +24,5 @@ char *get_content_from_response_dict(char *response);
 
 
 pipeline_result_t pipeline_run(pipeline_t pipeline);
+void pipeline_clean(pipeline_result_t result);
 #endif

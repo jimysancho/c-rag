@@ -65,11 +65,15 @@ void retrieved_chunks_sort(retrieval_chunk_t ***retrieved_chunks_ptr, size_t siz
         if (!swap) break;
     }
 
-    for (size_t c = n_chunks + 1; c < size; c++) {
+    if (n_chunks >= size) return;
+
+    for (size_t c = n_chunks; c < size; c++) {
         chunk_free(retrieved_chunks[c]->chunk);
+        free(retrieved_chunks[c]);
     }
 
-    *retrieved_chunks_ptr = realloc(retrieved_chunks, sizeof(retrieval_chunk_t *) * n_chunks);
+    retrieval_chunk_t **shrunk = realloc(retrieved_chunks, sizeof(retrieval_chunk_t *) * n_chunks);
+    if (shrunk) *retrieved_chunks_ptr = shrunk;
 }
 
 
@@ -126,6 +130,8 @@ retrieval_result_t retrieval_pipeline_run(retrieval_pipeline_t pipeline) {
     if (count) {
         retrieved_chunks_sort(&retrieved_chunks, count, pipeline.n_chunks);
     };
+
+    ll_free(chunks_hash.keys, 0);
 
     return (retrieval_result_t) {
         .chunks = retrieved_chunks,

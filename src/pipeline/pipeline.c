@@ -68,6 +68,9 @@ char *get_content_from_response_dict(char *response) {
     json_object_t *content_obj = (json_object_t *)content->value;
     char *content_str = strdup(content_obj->as.string);
     json_object_free(j);
+    free(j);
+    free(response);
+
     return content_str;
 }
 
@@ -128,5 +131,7 @@ void pipeline_clean(pipeline_result_t result) {
     free(result.gen_result.response);
     for (size_t c = 0; c < result.ret_result.n_chunks; c++) {
         chunk_free(result.ret_result.chunks[c]->chunk);
+        free(result.ret_result.chunks[c]);
     }
+    free(result.ret_result.chunks);
 }

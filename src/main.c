@@ -79,6 +79,8 @@ int main(int argc, char **argv) {
     (void)path;
     char *query = argv[2];
 
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     db_t db = (db_t) {
         .path = "./.db",
         .__created = 1
@@ -108,7 +110,8 @@ int main(int argc, char **argv) {
     );
 
     printf("Content -> %s\n", result.gen_result.response);
+    pipeline_clean(result);
     hash_map_free(db.keys);
-    
+    curl_global_cleanup();
     return 0;
 }
